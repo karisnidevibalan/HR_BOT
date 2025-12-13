@@ -4,8 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: npm ci && npm run build && ls -la dist/
+    startCommand: node dist/app.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

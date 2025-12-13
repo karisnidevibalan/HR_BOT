@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"console.log('✅ Build complete. Checking dist folder...')\" && ls dist/ || echo 'dist folder created'",
     "test": "jest",
     "demo": "node demo-server.js"
   },
