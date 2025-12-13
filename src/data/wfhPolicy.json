@@ -1,0 +1,56 @@
+{
+  "companyName": "Winfomi Technologies",
+  "effectiveDate": "2024-01-01",
+  "wfhPolicy": {
+    "eligibility": {
+      "serviceTime": "Minimum 6 months of service required",
+      "performanceRating": "Good or above performance rating",
+      "role": "Applicable for roles that can be performed remotely"
+    },
+    "frequency": {
+      "regular": "Maximum 2 days per week",
+      "adhoc": "Additional days with manager approval",
+      "fullRemote": "Special cases with senior management approval"
+    },
+    "application": {
+      "advance": "Minimum 24 hours notice required",
+      "platform": "Apply through People Portal or HR Agent",
+      "approval": "Immediate supervisor approval mandatory"
+    },
+    "equipment": {
+      "laptop": "Company laptop mandatory for WFH",
+      "internet": "Stable internet connection required",
+      "security": "VPN access for company resources"
+    },
+    "workingHours": {
+      "core": "Core hours 10 AM to 4 PM IST mandatory",
+      "flexibility": "Flexible start/end times within reason",
+      "availability": "Responsive on company communication channels"
+    }
+  },
+  "reimbursement": {
+    "travel": {
+      "name": "Travel Reimbursement",
+      "limits": {
+        "domestic": "As per company travel policy",
+        "international": "Pre-approved budget required"
+      }
+    },
+    "meal": {
+      "name": "Meal Reimbursement",
+      "limits": {
+        "breakfast": "₹200 per person",
+        "lunch": "₹400 per person", 
+        "dinner": "₹600 per person"
+      }
+    },
+    "medical": {
+      "name": "Medical Reimbursement",
+      "limit": "₹25,000 per financial year"
+    },
+    "internet": {
+      "name": "Internet Reimbursement",
+      "limit": "₹1,500 per month for regular WFH employees"
+    }
+  }
+}

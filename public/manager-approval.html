@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Approval - Winfomi HR</title>
+    <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👔 Manager Approval Portal</h1>
+            <p>Review and Approve Employee Requests</p>
+        </div>
+        
+        <div class="request-card">
+            <h2>Leave Request Review</h2>
+            
+            <div class="employee-info">
+                <div class="info-row">
+                        <span class="info-label">Employee:</span>
+                        <span class="info-value" id="employeeName">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value" id="leaveType">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">From:</span>
+                        <span class="info-value" id="startDate">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">To:</span>
+                        <span class="info-value" id="endDate">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Days:</span>
+                        <span class="info-value" id="duration">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span class="status-badge status-pending" id="statusBadge">Pending</span>
+                    </div>
+            </div>
+
+            <div class="reason-box">
+                <strong>Requested Reason</strong>
+                <p id="reason">Loading...</p>
+            </div>
+
+            <div class="comments-section">
+                <h3>Manager's Note (optional)</h3>
+                <textarea class="comment-box" id="managerComments" 
+                          placeholder="Add a short note for the employee, e.g. 'Approved. Enjoy your time off.'"></textarea>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-approve" onclick="processRequest('approve')">
+                    ✅ APPROVE REQUEST
+                </button>
+                <button class="btn btn-reject" onclick="processRequest('reject')">
+                    ❌ REJECT REQUEST
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get request ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestId = urlParams.get('id') || window.location.pathname.split('/').pop();
+
+        // Load request details
+        async function loadRequestDetails() {
+            try {
+                const response = await fetch(`/api/leave/status/${requestId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const record = data.record;
+                    const emp = record.employeeName || record.Employee_Name__c || 'Unknown';
+                    const type = record.leaveType || record.Leave_Type__c || 'N/A';
+                    const startRaw = record.startDate || record.Start_Date__c;
+                    const endRaw = record.endDate || record.End_Date__c;
+                    const reasonText = record.reason || record.Reason__c || 'No reason provided';
+
+                    document.getElementById('employeeName').textContent = emp;
+                    document.getElementById('leaveType').textContent = type;
+
+                    // Friendly date format
+                    const start = startRaw ? new Date(startRaw) : null;
+                    const end = endRaw ? new Date(endRaw) : null;
+                    const startDisplay = start ? start.toLocaleDateString() : '—';
+                    const endDisplay = end ? end.toLocaleDateString() : '—';
+                    document.getElementById('startDate').textContent = startDisplay;
+                    document.getElementById('endDate').textContent = endDisplay;
+                    document.getElementById('reason').textContent = reasonText.replace(/\*\*/g, '');
+
+                    // Calculate duration (inclusive)
+                    let days = '—';
+                    if (start && end) {
+                        const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+                        days = `${diff} day(s)`;
+                    }
+                    document.getElementById('duration').textContent = days;
+
+                    // Status badge
+                    const status = (record.status || record.Status__c || 'Pending').toString();
+                    const statusBadge = document.getElementById('statusBadge');
+                    statusBadge.textContent = status;
+                    if (/approved/i.test(status)) {
+                        statusBadge.className = 'status-badge';
+                        statusBadge.style.background = '#e6ffed';
+                        statusBadge.style.color = '#0f5132';
+                    } else if (/rejected/i.test(status)) {
+                        statusBadge.className = 'status-badge';
+                        statusBadge.style.background = '#ffe7e7';
+                        statusBadge.style.color = '#6b0f0f';
+                    } else {
+                        statusBadge.className = 'status-badge';
+                        statusBadge.style.background = '#fff3cd';
+                        statusBadge.style.color = '#856404';
+                    }
+                } else {
+                    alert('Request not found!');
+                }
+            } catch (error) {
+                console.error('Error loading request:', error);
+                alert('Error loading request details');
+            }
+        }
+
+        // Process approval/rejection
+        async function processRequest(action) {
+            const comments = document.getElementById('managerComments').value;
+            
+            const confirmMsg = action === 'approve' ? 
+                'Are you sure you want to APPROVE this leave request?' : 
+                'Are you sure you want to REJECT this leave request?';
+                
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const response = await fetch(`/api/manager/${action}/${requestId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        managerComments: comments,
+                        managerName: 'Demo Manager', // In real system, get from login
+                        actionDate: new Date().toISOString()
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Request ${action.toUpperCase()}ED successfully!`);
+                    // Redirect or refresh
+                    window.location.href = '/manager/dashboard';
+                } else {
+                    alert(`❌ Failed to ${action} request: ${result.error}`);
+                }
+            } catch (error) {
+                console.error(`Error ${action}ing request:`, error);
+                alert(`Error processing request: ${error.message}`);
+            }
+        }
+
+        // Load request details when page loads
+        window.onload = loadRequestDetails;
+    </script>
+</body>
+</html>

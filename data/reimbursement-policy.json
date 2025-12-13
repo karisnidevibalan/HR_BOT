@@ -1,0 +1,50 @@
+{
+  "companyName": "Winfomi Technologies",
+  "effectiveDate": "2024-01-01",
+  "reimbursementTypes": {
+    "travel": {
+      "name": "Travel Reimbursement",
+      "eligibility": "Business travel approved by manager",
+      "limits": {
+        "domestic": "As per company travel policy",
+        "international": "Pre-approved budget required"
+      },
+      "documentation": "Original receipts, boarding passes, hotel bills"
+    },
+    "meal": {
+      "name": "Meal Reimbursement",
+      "eligibility": "Business meals and client entertainment",
+      "limits": {
+        "breakfast": "₹200 per person",
+        "lunch": "₹400 per person",
+        "dinner": "₹600 per person"
+      },
+      "documentation": "Original bills with GST, attendee list for client meals"
+    },
+    "medical": {
+      "name": "Medical Reimbursement",
+      "eligibility": "Self and immediate family members",
+      "limit": "₹25,000 per financial year",
+      "documentation": "Original medical bills, prescriptions, diagnostic reports"
+    },
+    "internet": {
+      "name": "Internet Reimbursement",
+      "eligibility": "Employees on regular WFH",
+      "limit": "₹1,500 per month",
+      "documentation": "Internet service provider bill"
+    },
+    "mobile": {
+      "name": "Mobile Reimbursement",
+      "eligibility": "Employees requiring business communication",
+      "limit": "₹2,000 per month",
+      "documentation": "Mobile service bill"
+    }
+  },
+  "process": {
+    "application": "Submit through People Portal within 30 days",
+    "approval": "Manager approval for amounts up to ₹10,000",
+    "documentation": "Original receipts mandatory, photocopies not accepted",
+    "timeline": "Processed within 15 working days of approval",
+    "payment": "Credited with next salary cycle"
+  }
+}

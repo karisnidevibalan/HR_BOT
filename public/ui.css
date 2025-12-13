@@ -1,0 +1,131 @@
+/* Shared UI for Winfomi HR Agent - clean, professional, responsive */
+:root{
+  /* Lighter professional palette: soft sky + lighter blue accents */
+  --bg-1: #fbfdff; /* almost white */
+  --panel-bg: #ffffff;
+  --muted: #6b7280; /* neutral muted */
+  --accent: #3b82f6; /* blue-500, lighter */
+  --accent-700: #2563eb; /* blue-600 */
+  --accent-warm: #fb923c; /* warm secondary accent */
+  --brand: #07203a; /* dark navy for text */
+  --radius-lg: 14px;
+  --radius-md: 8px;
+  --glass: rgba(255,255,255,0.8);
+  --shadow-1: 0 10px 24px rgba(11,37,69,0.06);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family: Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial;
+  background: linear-gradient(180deg, var(--bg-1), #fbfdff 60%);
+  color:var(--brand);
+  -webkit-font-smoothing:antialiased;
+  transition:background 0.2s ease;
+}
+
+.container{
+  max-width:980px;
+  margin:36px auto;
+  background:var(--panel-bg);
+  border-radius:var(--radius-lg);
+  box-shadow:0 6px 18px rgba(7,20,40,0.04);
+  overflow:hidden;
+}
+
+.header{
+  padding:28px 32px;
+  background:linear-gradient(135deg, #07203a 0%, #0f3862 100%);
+  color:var(--panel-bg);
+  box-shadow:0 4px 20px rgba(7,32,58,0.15);
+  border-bottom:1px solid rgba(255,255,255,0.1);
+}
+.header h1{margin:0;font-size:28px;letter-spacing:-0.5px;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,0.1)}
+.header p{margin:6px 0 0 0;opacity:0.92;font-size:14px;font-weight:500}
+.demo-badge{display:inline-block;margin-left:8px;background:var(--accent-warm);color:white;padding:6px 12px;border-radius:999px;font-size:12px}
+
+.main-grid{display:grid;grid-template-columns:1fr 360px;gap:0}
+@media (max-width:900px){.main-grid{grid-template-columns:1fr}}
+
+/* Chat column */
+.chat-column{display:flex;flex-direction:column;min-height:520px}
+.chat-container{flex:1;padding:28px;background:linear-gradient(180deg,#ffffff 0%, var(--bg-1) 100%);overflow:auto}
+.message{margin-bottom:16px;padding:16px 20px;border-radius:12px;max-width:78%;box-shadow:0 8px 22px rgba(7,16,51,0.05);font-size:15px;line-height:1.5;animation:slideIn 0.3s ease-out}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.bot-message{background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%);border:1px solid rgba(7,16,51,0.08);color:var(--brand);transition:box-shadow 0.2s ease}
+.bot-message:hover{box-shadow:0 12px 28px rgba(7,16,51,0.08)}
+.user-message{background:linear-gradient(180deg,#60a5fa 0%, var(--accent) 100%);color:white;margin-left:auto;text-align:right;box-shadow:0 8px 22px rgba(37,99,235,0.15)}
+.message strong{display:block;margin-bottom:6px;color:var(--brand);font-weight:700}
+
+/* Confirmation prompt styling */
+.confirmation-prompt{background:linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%);border:1px solid rgba(16,185,129,0.2);padding:16px !important}
+.confirm-btn{padding:10px 16px;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;transition:all 0.2s ease;background:#10b981;color:white;box-shadow:0 4px 12px rgba(16,185,129,0.15)}
+.confirm-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,185,129,0.2)}
+.confirm-btn:active{transform:translateY(0)}
+.reject-btn{background:#ef4444;box-shadow:0 4px 12px rgba(239,68,68,0.15)}
+.reject-btn:hover{box-shadow:0 6px 16px rgba(239,68,68,0.2)}
+.edit-btn{background:#f59e0b;box-shadow:0 4px 12px rgba(245,158,11,0.15)}
+.edit-btn:hover{box-shadow:0 6px 16px rgba(245,158,11,0.2)}
+
+.input-container{display:flex;gap:14px;padding:22px;border-top:1px solid #eef2f7;align-items:center;background:#fafbfc;position:relative}
+.message-input{flex:1;padding:14px 18px;border:2px solid #e6edf3;border-radius:12px;font-size:15px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.02);transition:all 0.2s ease;position:relative;z-index:1}
+.message-input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 2px rgba(0,0,0,0.02), 0 0 0 3px rgba(59,130,246,0.1)}
+
+/* Dropdown styling */
+.dropdown-menu{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #e6edf3;border-radius:12px;box-shadow:0 12px 32px rgba(7,16,51,0.15);z-index:1000;max-height:320px;overflow-y:auto;margin-top:-8px;padding:8px 0}
+.dropdown-item{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:all 0.2s ease;border-left:3px solid transparent}
+.dropdown-item:hover{background:#f8fafc;border-left-color:var(--accent)}
+.dropdown-icon{font-size:18px;min-width:24px}
+.dropdown-label{font-weight:600;color:var(--brand);flex:0 0 auto;min-width:90px}
+.dropdown-hint{font-size:13px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.8}
+.send-button{background:linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);color:white;padding:12px 22px;border:none;border-radius:10px;cursor:pointer;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.16);transition:all 0.2s ease;font-size:15px}
+.send-button:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,99,235,0.2)}
+.send-button:active{transform:translateY(0);box-shadow:0 4px 12px rgba(37,99,235,0.12)}
+.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.loading{display:none;text-align:center;color:var(--muted);font-style:italic;padding:8px}
+
+.quick-actions{padding:18px;border-top:1px solid #eef2fb;background:#fbfdff}
+.quick-buttons{display:flex;flex-wrap:wrap;gap:10px}
+.quick-button{background:#f8fbff;border:2px solid rgba(37,99,235,0.12);color:var(--brand);padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;transition:all 0.2s ease;font-weight:600}
+.quick-button:hover{background:var(--accent);color:white;border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,0.15)}
+.quick-button:active{transform:translateY(0);box-shadow:0 2px 6px rgba(37,99,235,0.1)}
+
+/* Right column: Help & API */
+.side-column{padding:20px;background:linear-gradient(180deg,#fbfdff, #f6f9ff)}
+.card{background:white;border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,0.04);margin-bottom:16px;border:1px solid rgba(37,99,235,0.06);transition:all 0.3s ease}
+.card:hover{box-shadow:0 12px 32px rgba(15,23,42,0.08);border-color:rgba(37,99,235,0.12)}
+.card h3{margin:0 0 12px 0;font-size:16px;font-weight:700;color:var(--brand)}
+.code-block{background:#fff7cc;color:#2b2b0b;padding:12px;border-radius:8px;font-family:monospace;font-size:13px;overflow:auto}
+
+.api-section{border-left:4px solid var(--accent);padding:10px}
+
+/* Manager page utilities */
+.request-card{padding:26px}
+.employee-info{background:#fbfdff;padding:18px;border-radius:8px;margin-bottom:16px;border:1px solid #eef4f5}
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.info-label{font-weight:600;color:#07203a}
+.info-value{color:#334e68}
+
+.btn{padding:14px 20px;border-radius:10px;border:none;cursor:pointer;font-weight:700;transition:all 0.2s ease;font-size:15px}
+.btn-approve{background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:white;box-shadow:0 6px 18px rgba(16,185,129,0.16)}
+.btn-approve:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(16,185,129,0.2)}
+.btn-reject{background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);color:white;box-shadow:0 6px 18px rgba(239,68,68,0.16)}
+.btn-reject:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(239,68,68,0.2)}
+
+.reason-box{background:#f8fafc;padding:14px;border-left:4px solid #60a5fa;border-radius:6px}
+.status-badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:700;text-transform:uppercase;font-size:12px}
+
+.comment-box{width:100%;min-height:84px;padding:12px;border:1px solid #e6edf3;border-radius:8px}
+
+/* minor utilities */
+.small{font-size:13px;color:var(--muted)}
+.center{display:flex;align-items:center;justify-content:center}
+
+/* Accessibility */
+:focus{outline:2px solid rgba(37,99,235,0.18);outline-offset:2px}

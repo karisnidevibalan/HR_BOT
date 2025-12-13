@@ -1,0 +1,85 @@
+{
+  "year": 2024,
+  "companyName": "Winfomi Technologies",
+  "totalHolidays": 12,
+  "holidays": [
+    {
+      "date": "2024-01-26",
+      "name": "Republic Day",
+      "type": "National",
+      "optional": false
+    },
+    {
+      "date": "2024-03-08", 
+      "name": "Holi",
+      "type": "Festival",
+      "optional": false
+    },
+    {
+      "date": "2024-03-29",
+      "name": "Good Friday",
+      "type": "Religious",
+      "optional": false
+    },
+    {
+      "date": "2024-04-11",
+      "name": "Eid ul-Fitr",
+      "type": "Festival",
+      "optional": false
+    },
+    {
+      "date": "2024-08-15",
+      "name": "Independence Day", 
+      "type": "National",
+      "optional": false
+    },
+    {
+      "date": "2024-08-19",
+      "name": "Raksha Bandhan",
+      "type": "Festival",
+      "optional": true
+    },
+    {
+      "date": "2024-09-02",
+      "name": "Ganesh Chaturthi",
+      "type": "Festival",
+      "optional": false
+    },
+    {
+      "date": "2024-10-02",
+      "name": "Gandhi Jayanti",
+      "type": "National",
+      "optional": false
+    },
+    {
+      "date": "2024-10-12",
+      "name": "Dussehra",
+      "type": "Festival", 
+      "optional": false
+    },
+    {
+      "date": "2024-11-01",
+      "name": "Diwali",
+      "type": "Festival",
+      "optional": false
+    },
+    {
+      "date": "2024-11-15",
+      "name": "Guru Nanak Jayanti",
+      "type": "Religious",
+      "optional": true
+    },
+    {
+      "date": "2024-12-25",
+      "name": "Christmas Day",
+      "type": "Religious",
+      "optional": false
+    }
+  ],
+  "notes": {
+    "workingDays": "Monday to Friday",
+    "weekends": "Saturday and Sunday are weekly offs",
+    "optionalHolidays": "Employees can choose 2 optional holidays per year",
+    "compensation": "Work on holidays eligible for double pay or comp-off"
+  }
+}

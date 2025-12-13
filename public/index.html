@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Winfomi HR Agent Bot - Demo</title>
+    <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Winfomi HR Agent Bot</h1>
+            <p>AI-Powered HR Assistant for Employee Queries & Applications</p>
+            <span class="demo-badge">DEMO MODE</span>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot-message">
+                <strong>HR Agent:</strong> Hello — I'm your HR Assistant. I can help with:
+                <br><br>
+                • Leave policy and balances
+                • Company holidays and calendar
+                • Work-from-home (WFH) policy and requests
+                • Reimbursement process and limits
+                • Submit leave or WFH requests
+                <br><br>
+                Try: "What's the leave policy?", "Show holiday list", or "I want to apply for leave"
+            </div>
+        </div>
+        
+        <div class="loading" id="loading">🤔 Thinking...</div>
+        
+        <div class="input-container">
+         <input type="text" id="messageInput" class="message-input" 
+             placeholder="Ask naturally — e.g. 'Apply leave Oct 18-20 for wedding' or 'What's my leave balance?'"
+             onkeypress="handleKeyPress(event)"
+             oninput="handleInputChange(event)"
+             autocomplete="off">
+            <div id="dropdown" class="dropdown-menu" style="display:none;"></div>
+            <button id="micButton" class="send-button" title="Speak your request" onclick="toggleSpeechRecognition()" style="background:#10b981">🎤</button>
+            <button id="ttsToggle" class="send-button" title="Toggle speech output" onclick="toggleTts()">🔊</button>
+            <button class="send-button" onclick="sendMessage()">Send</button>
+        </div>
+        
+        <div id="quickActions" class="quick-actions" style="display:none;">
+            <h3>Quick Actions:</h3>
+            <div class="quick-buttons">
+                <span class="quick-button" onclick="quickMessage('What is the leave policy?')">Leave Policy</span>
+                <span class="quick-button" onclick="quickMessage('Show holiday list')">Holiday Calendar</span>
+                <span class="quick-button" onclick="quickMessage('Tell me about WFH policy')">WFH Policy</span>
+                <span class="quick-button" onclick="quickMessage('I want to apply for leave')">Apply Leave</span>
+                <span class="quick-button" onclick="quickMessage('I need WFH on Friday')">Apply WFH</span>
+                <span class="quick-button" onclick="quickMessage('How do reimbursements work?')">Reimbursements</span>
+            </div>
+        </div>
+        
+        
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const loading = document.getElementById('loading');
+        const quickActionsPanel = document.getElementById('quickActions');
+        const dropdown = document.getElementById('dropdown');
+        const micButton = document.getElementById('micButton');
+
+        // Generate or retrieve session ID
+        function getSessionId() {
+            let sessionId = localStorage.getItem('hr_bot_session_id');
+            if (!sessionId) {
+                sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('hr_bot_session_id', sessionId);
+            }
+            return sessionId;
+        }
+
+        // Store employee email in localStorage
+        let employeeEmail = localStorage.getItem('employeeEmail') || null;
+        
+        // Check if email is stored, if not, ask for it on first leave/WFH request
+        function getEmployeeEmail() {
+            if (!employeeEmail) {
+                const email = prompt('Please enter your email address for notifications:');
+                if (email && email.includes('@')) {
+                    employeeEmail = email;
+                    localStorage.setItem('employeeEmail', email);
+                    return email;
+                }
+                return null;
+            }
+            return employeeEmail;
+        }
+
+        // Speech Recognition (STT) setup
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-IN';
+
+            recognition.onstart = () => {
+                isListening = true;
+                micButton.textContent = '🎙️';
+                micButton.style.background = '#ef4444';
+                micButton.style.animation = 'pulse 1.5s infinite';
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                // Show interim results as user speaks
+                if (interimTranscript) {
+                    messageInput.value = interimTranscript;
+                }
+                if (finalTranscript) {
+                    messageInput.value = finalTranscript;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.warn('Speech recognition error:', event.error);
+                if (event.error !== 'no-speech') {
+                    addMessage(`❌ Microphone error: ${event.error}. Please try again.`);
+                }
+                stopListening();
+            };
+
+            recognition.onend = () => {
+                stopListening();
+                // Auto-send message after speech ends with slight delay
+                handleSpeechEnd();
+            };
+        }
+
+        function startListening() {
+            if (!recognition) {
+                addMessage('❌ Speech recognition not supported in your browser. Please use Chrome, Firefox, Safari, or Edge.');
+                return;
+            }
+            messageInput.value = '';
+            isListening = true;
+            recognition.start();
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            isListening = false;
+            micButton.textContent = '🎤';
+            micButton.style.background = '#10b981';
+            micButton.style.animation = 'none';
+        }
+
+        function toggleSpeechRecognition() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        // Add pulse animation for recording indicator
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.6; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Dropdown suggestion database
+        const suggestions = [
+            { label: 'Apply leave', icon: '📋', text: 'I want to apply for leave' },
+            { label: 'Leave policy', icon: '📜', text: 'What is the leave policy?' },
+            { label: 'Leave balance', icon: '📊', text: 'What is my leave balance?' },
+            { label: 'Holiday calendar', icon: '📅', text: 'Show holiday list' },
+            { label: 'WFH policy', icon: '🏠', text: 'Tell me about WFH policy' },
+            { label: 'Apply WFH', icon: '💼', text: 'I need WFH on' },
+            { label: 'Reimbursements', icon: '💰', text: 'How do reimbursements work?' },
+            { label: 'Company policies', icon: '📖', text: 'Show company policies' },
+            { label: 'Team calendar', icon: '👥', text: 'Show team calendar' },
+            { label: 'My applications', icon: '✅', text: 'Show my applications' }
+        ];
+
+        // Filter and show dropdown suggestions
+        function showDropdown(searchTerm) {
+            const term = searchTerm.toLowerCase().trim();
+            if (!term || term.length < 1) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            const filtered = suggestions.filter(s => 
+                s.label.toLowerCase().includes(term) || 
+                s.text.toLowerCase().includes(term)
+            );
+
+            if (filtered.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            dropdown.innerHTML = filtered.map((item, idx) => `
+                <div class="dropdown-item" onclick="selectDropdownItem(${idx}, '${item.text.replace(/'/g, "\\'")}')">
+                    <span class="dropdown-icon">${item.icon}</span>
+                    <span class="dropdown-label">${item.label}</span>
+                    <span class="dropdown-hint">${item.text}</span>
+                </div>
+            `).join('');
+            dropdown.style.display = 'block';
+        }
+
+        // Hide dropdown
+        function hideDropdown() {
+            dropdown.style.display = 'none';
+        }
+
+        // Select item from dropdown
+        function selectDropdownItem(idx, text) {
+            messageInput.value = text;
+            hideDropdown();
+            messageInput.focus();
+        }
+
+        // Handle input change for dropdown
+        function handleInputChange(event) {
+            const value = messageInput.value;
+            if (value.length > 0) {
+                showDropdown(value);
+            } else {
+                hideDropdown();
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.input-container')) {
+                hideDropdown();
+            }
+        });
+
+        // Persist chat messages so they don't disappear on reloads
+        const CHAT_STORAGE_KEY = 'hr_agent_chat_messages_v1';
+
+        // Helper to get current month/year info (browser)
+        function getCurrentMonthYear() {
+            const d = new Date();
+            const month = d.getMonth() + 1; // 1-12
+            const monthPadded = String(month).padStart(2, '0');
+            const year = d.getFullYear();
+            const monthName = d.toLocaleString('en-US', { month: 'short' });
+            return { month, monthPadded, year, monthName };
+        }
+
+        // If user types a single day (e.g. '12'), suggest/expand to full date using current month/year
+        function suggestDateFromDay(dayStr) {
+            const day = parseInt(dayStr, 10);
+            if (isNaN(day) || day < 1 || day > 31) return null;
+            const { month, monthPadded, year } = getCurrentMonthYear();
+            const today = new Date(); today.setHours(0,0,0,0);
+            const candidate = new Date(year, month - 1, day);
+            let chosen = candidate;
+            if (isNaN(candidate.getTime())) return null;
+            if (candidate < today) {
+                // suggest same month/day next year
+                chosen = new Date(year + 1, month - 1, day);
+            }
+            // return as dd/mm/yyyy which server accepts
+            const dd = String(chosen.getDate()).padStart(2, '0');
+            const mm = String(chosen.getMonth() + 1).padStart(2, '0');
+            const yyyy = chosen.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+        }
+
+        function saveMessagesToStorage() {
+            try {
+                const nodes = Array.from(chatContainer.querySelectorAll('.message'));
+                const items = nodes.map(n => ({ html: n.innerHTML, classes: n.className }));
+                localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(items));
+            } catch (e) { console.warn('Could not save messages', e); }
+        }
+
+        function loadMessagesFromStorage() {
+            try {
+                const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+                if (!raw) return;
+                const items = JSON.parse(raw);
+                items.forEach(it => {
+                    const div = document.createElement('div');
+                    div.className = it.classes || 'message bot-message';
+                    div.innerHTML = it.html || '';
+                    chatContainer.appendChild(div);
+                });
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } catch (e) { console.warn('Could not load saved messages', e); }
+        }
+
+        // Text-to-Speech (TTS) helpers
+        const TTS_STORAGE_KEY = 'hr_agent_tts_enabled_v1';
+
+        function isTtsEnabled() {
+            try { return localStorage.getItem(TTS_STORAGE_KEY) === '1'; } catch (e) { return false; }
+        }
+
+        function setTtsEnabled(enabled) {
+            try { localStorage.setItem(TTS_STORAGE_KEY, enabled ? '1' : '0'); } catch (e) {}
+            updateTtsButton();
+        }
+
+        function toggleTts() {
+            const next = !isTtsEnabled();
+            setTtsEnabled(next);
+        }
+
+        function updateTtsButton() {
+            const btn = document.getElementById('ttsToggle');
+            if (!btn) return;
+            if (isTtsEnabled()) { btn.textContent = '🔊'; btn.style.opacity = '1'; }
+            else { btn.textContent = '🔈'; btn.style.opacity = '0.8'; }
+        }
+
+        function speak(text) {
+            if (!window.speechSynthesis) return;
+            try {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text.replace(/\n/g, ' '));
+                u.lang = 'en-IN';
+                u.rate = 1;
+                u.pitch = 1;
+                // choose a voice close to user's locale if available
+                const voices = window.speechSynthesis.getVoices();
+                if (voices && voices.length) {
+                    const candidate = voices.find(v => /en-?us|en-?in|google/i.test(v.name) || /en-?us|en-?in/i.test(v.lang));
+                    if (candidate) u.voice = candidate;
+                }
+                window.speechSynthesis.speak(u);
+            } catch (e) { console.warn('TTS speak failed', e); }
+        }
+
+        function addMessage(message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            if (isUser) {
+                messageDiv.innerHTML = `<strong>You:</strong> ${message}`;
+            } else {
+                messageDiv.innerHTML = `<strong>HR Agent:</strong> ${message.replace(/\n/g, '<br>')}`;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            // persist message history
+            saveMessagesToStorage();
+        }
+
+        // Store pending leave date globally
+        let pendingLeaveDate = null;
+
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+        }
+
+        async function sendMessage() {
+            const raw = messageInput.value.trim();
+            if (!raw) return;
+
+            // If user typed only a day (e.g. "12"), expand to full date using current month/year
+            let messageToSend = raw;
+            if (/^\d{1,2}$/.test(raw)) {
+                const expanded = suggestDateFromDay(raw);
+                if (expanded) {
+                    // show original short input to user but send expanded date to server
+                    addMessage(raw, true);
+                    messageInput.value = '';
+                    showLoading(true);
+                    messageToSend = expanded;
+                } else {
+                    addMessage(raw, true);
+                    messageInput.value = '';
+                    showLoading(true);
+                }
+            } else {
+                addMessage(raw, true);
+                messageInput.value = '';
+                showLoading(true);
+            }
+
+            try {
+                // Get employee email for leave/WFH requests
+                const email = getEmployeeEmail();
+                console.log('📧 Sending email to backend:', email);
+                
+                const payload = { 
+                    message: messageToSend,
+                    employeeEmail: email
+                };
+                console.log('📦 Full payload:', payload);
+                if (pendingLeaveDate) {
+                    payload.pendingLeaveDate = pendingLeaveDate;
+                }
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': getSessionId()
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (data.reply) {
+                    addMessage(data.reply);
+                    
+                    // If backend says to show confirmation buttons (before creation)
+                    if (data.showButtons === true) {
+                        addConfirmationButtons();
+                    }
+                    
+                    // If backend says to show action buttons (after creation)
+                    if (data.showActionButtons === true) {
+                        addActionButtons(data.recordId);
+                    }
+                    
+                    // Check if server is asking for a reason and store the pending date
+                    if (data.pendingDate) {
+                        pendingLeaveDate = data.pendingDate;
+                    } else {
+                        // Clear pending date after successful request
+                        pendingLeaveDate = null;
+                    }
+                    
+                    // speak bot reply if enabled
+                    try { if (isTtsEnabled()) speak(data.reply); } catch (e) { console.warn('TTS error', e); }
+                    
+                    // Fallback: If server sends needsConfirmation flag, show confirmation buttons
+                    if (!data.showButtons && (data.needsConfirmation || isConfirmationNeeded(data.reply))) {
+                        addConfirmationPrompt();
+                    }
+                    
+                    // show quick actions when bot offers help (casual prompt)
+                    const quick = document.getElementById('quickActions');
+                    const showTriggers = ['I can help with leave', 'What would you like to do today', 'I can help with leave, WFH, reimbursements'];
+                    const shouldShow = showTriggers.some(t => data.reply.includes(t));
+                    quick.style.display = shouldShow ? 'block' : 'none';
+                } else if (data.error) {
+                    addMessage(`❌ Error: ${data.error}`);
+                }
+            } catch (error) {
+                addMessage('❌ Connection error. Please make sure the server is running.');
+            }
+            
+            showLoading(false);
+        }
+
+        // Check if confirmation is needed based on bot response
+        function isConfirmationNeeded(reply) {
+            // Don't show buttons for error messages
+            if (reply.includes('❌') || reply.includes('⚠️') || 
+                reply.includes('Cannot create') || reply.includes('past date') ||
+                reply.includes('Error') || reply.includes('Failed')) {
+                return false;
+            }
+            
+            // Only show buttons for successful leave/WFH creation
+            const successKeywords = ['Leave request created', 'WFH request submitted', 'request created'];
+            return successKeywords.some(kw => reply.includes(kw));
+        }
+
+        // Add confirmation buttons to chat
+        function addConfirmationButtons() {
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'message confirmation-buttons';
+            confirmDiv.innerHTML = `
+                <div style="display:flex; gap:10px; margin-top:12px; justify-content:center;">
+                    <button class="confirm-btn" onclick="handleConfirmClick('yes')">✅ Confirm</button>
+                    <button class="confirm-btn reject-btn" onclick="handleConfirmClick('no')">❌ Cancel</button>
+                </div>
+            `;
+            chatContainer.appendChild(confirmDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Add action buttons after successful creation (Edit/Cancel)
+        function addActionButtons(recordId) {
+            const actionDiv = document.createElement('div');
+            actionDiv.className = 'message action-buttons';
+            actionDiv.innerHTML = `
+                <div style="display:flex; gap:10px; margin-top:12px; justify-content:center;">
+                    <button class="confirm-btn edit-btn" onclick="handleEditClick()">✏️ Edit</button>
+                    <button class="confirm-btn reject-btn" onclick="handleCancelClick('${recordId}')">❌ Cancel Request</button>
+                </div>
+            `;
+            chatContainer.appendChild(actionDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Handle edit click
+        function handleEditClick() {
+            document.querySelectorAll('.action-buttons').forEach(el => el.remove());
+            messageInput.value = 'edit';
+            sendMessage();
+        }
+
+        // Handle cancel request click
+        async function handleCancelClick(recordId) {
+            if (!confirm('Are you sure you want to cancel this request?')) {
+                return;
+            }
+            
+            document.querySelectorAll('.action-buttons').forEach(el => el.remove());
+            addMessage('Cancel request with ID: ' + recordId, true);
+            
+            showLoading(true);
+            try {
+                const email = getEmployeeEmail();
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': getSessionId()
+                    },
+                    body: JSON.stringify({ 
+                        message: 'cancel request ' + recordId,
+                        context: { email }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const reply = data.reply || 'Request cancelled.';
+                    addMessage(reply, false);
+                    if (isTtsEnabled()) speak(reply);
+                } else {
+                    addMessage('❌ Error cancelling request. Please try again.', false);
+                }
+            } catch (error) {
+                console.error('Cancel error:', error);
+                addMessage('❌ Connection error. Please try again.', false);
+            }
+            showLoading(false);
+        }
+
+        // Handle confirmation button click - sends yes/no to backend
+        async function handleConfirmClick(action) {
+            // Remove all confirmation button divs
+            document.querySelectorAll('.confirmation-buttons').forEach(el => el.remove());
+            
+            // Show user's choice
+            addMessage(action === 'yes' ? 'Yes' : 'No', true);
+            
+            // Send to backend
+            showLoading(true);
+            try {
+                const email = getEmployeeEmail();
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': getSessionId()
+                    },
+                    body: JSON.stringify({ 
+                        message: action === 'yes' ? 'yes' : 'no',
+                        context: { email }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const reply = data.reply || 'Request processed.';
+                    addMessage(reply, false);
+                    
+                    // If backend says to show action buttons (Edit/Cancel after creation)
+                    if (data.showActionButtons === true) {
+                        addActionButtons(data.recordId);
+                    }
+                    
+                    if (isTtsEnabled()) speak(reply);
+                } else {
+                    addMessage('❌ Error processing your confirmation. Please try again.', false);
+                }
+            } catch (error) {
+                console.error('Confirmation error:', error);
+                addMessage('❌ Connection error. Please try again.', false);
+            }
+            showLoading(false);
+        }
+        
+        // Legacy function for backward compatibility
+        function addConfirmationPrompt() {
+            addConfirmationButtons();
+        }
+        
+        function confirmAction(action) {
+            handleConfirmClick(action);
+        }
+
+        // Allow user to edit message
+        function editMessage() {
+            // Remove all confirmation prompts
+            document.querySelectorAll('.confirmation-prompt').forEach(el => el.remove());
+            
+            // Keep pendingLeaveDate so the next message is understood as a reason update
+            // The server will process it with the existing date context
+            
+            addMessage('✏️ Please provide the correct reason for your leave request.', false);
+            messageInput.value = '';
+            messageInput.focus();
+            messageInput.style.borderColor = '#f59e0b';
+            setTimeout(() => {
+                messageInput.style.borderColor = '#e6edf3';
+            }, 2000);
+        }
+
+        // Auto-send when user speaks (detect silence after speech)
+        let speechTimeout;
+        function handleSpeechEnd() {
+            clearTimeout(speechTimeout);
+            speechTimeout = setTimeout(() => {
+                const value = messageInput.value.trim();
+                if (value && value.length > 3) {
+                    // Auto-send after speech ends with 1.5s silence
+                    sendMessage();
+                }
+            }, 1500);
+        }
+
+        function quickMessage(message) {
+            messageInput.value = message;
+            sendMessage();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Test server connection on load
+        window.onload = async function() {
+            // restore messages from previous session
+            loadMessagesFromStorage();
+
+            // update placeholder to show current month/year for quick day-only inputs
+            try {
+                const { monthName, year } = getCurrentMonthYear();
+                messageInput.placeholder = `Ask naturally — e.g. 'Apply leave Oct 18-20 for wedding' or enter a day like '12' (defaults to ${monthName} ${year})`;
+            } catch (e) {
+                // ignore
+            }
+
+            // initialize TTS button state
+            try { updateTtsButton(); } catch (e) {}
+
+            // Show dropdown by default with all suggestions
+            try {
+                dropdown.innerHTML = suggestions.map((item, idx) => `
+                    <div class="dropdown-item" onclick="selectDropdownItem(${idx}, '${item.text.replace(/'/g, "\\'")}')">
+                        <span class="dropdown-icon">${item.icon}</span>
+                        <span class="dropdown-label">${item.label}</span>
+                        <span class="dropdown-hint">${item.text}</span>
+                    </div>
+                `).join('');
+                dropdown.style.display = 'block';
+            } catch (e) {
+                console.warn('Could not show dropdown', e);
+            }
+
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+
+                if (data.status === 'OK') {
+                    console.log('✅ Server connected successfully');
+                    console.log('📌 Session ID:', getSessionId());
+                }
+            } catch (error) {
+                // avoid cluttering the chat UI; log warning to console instead
+                console.warn('Server connection failed. Please start the server.', error);
+            }
+        };
+
+        // Clear session (for testing) - can be called from browser console
+        function clearSession() {
+            localStorage.removeItem('hr_bot_session_id');
+            localStorage.removeItem('employeeEmail');
+            localStorage.removeItem('hr_agent_chat_messages_v1');
+            location.reload();
+        }
+        
+        // Log session info
+        console.log('🔑 Session ID:', getSessionId());
+        console.log('📧 Stored Email:', employeeEmail);
+        console.log('💡 To clear session and start fresh, type: clearSession()');
+    </script>
+</body>
+</html>

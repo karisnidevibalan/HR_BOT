@@ -1,0 +1,41 @@
+{
+  "companyName": "Winfomi Technologies",
+  "effectiveDate": "2024-01-01",
+  "wfhPolicy": {
+    "eligibility": {
+      "serviceTime": "Minimum 6 months of service required",
+      "performanceRating": "Good or above performance rating",
+      "role": "Applicable for roles that can be performed remotely"
+    },
+    "frequency": {
+      "regular": "Maximum 2 days per week",
+      "adhoc": "Additional days with manager approval",
+      "fullRemote": "Special cases with senior management approval"
+    },
+    "application": {
+      "advance": "Minimum 24 hours notice required",
+      "platform": "Apply through People Portal or HR Agent",
+      "approval": "Immediate supervisor approval mandatory"
+    },
+    "equipment": {
+      "laptop": "Company laptop mandatory for WFH",
+      "internet": "Stable internet connection required",
+      "security": "VPN access for company resources"
+    },
+    "workingHours": {
+      "core": "Core hours 10 AM to 4 PM IST mandatory",
+      "flexibility": "Flexible start/end times within reason",
+      "availability": "Responsive on company communication channels"
+    },
+    "monitoring": {
+      "productivity": "Daily task reporting required",
+      "meetings": "Mandatory attendance at scheduled meetings",
+      "check-ins": "Regular check-ins with team lead"
+    }
+  },
+  "restrictions": {
+    "probation": "Not available during probation period",
+    "projects": "Critical project phases may restrict WFH",
+    "client": "Client meetings require office presence unless approved"
+  }
+}

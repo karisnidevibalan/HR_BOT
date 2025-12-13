@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Request Approval</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .details-table {
+            width: 100%;
+            margin: 30px 0;
+            border-collapse: collapse;
+        }
+        
+        .details-table tr {
+            border-bottom: 1px solid #eee;
+        }
+        
+        .details-table td {
+            padding: 15px 10px;
+        }
+        
+        .details-table td:first-child {
+            font-weight: 600;
+            color: #555;
+            width: 40%;
+        }
+        
+        .details-table td:last-child {
+            color: #333;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .approve-btn {
+            background: #28a745;
+            color: white;
+        }
+        
+        .approve-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .reject-btn {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .reject-btn:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+            color: #667eea;
+        }
+        
+        .message {
+            display: none;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .record-id {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Leave Request Approval</h1>
+        <p class="subtitle">Review and approve or reject this leave request</p>
+        
+        <table class="details-table" id="detailsTable">
+            <tr>
+                <td>Record ID</td>
+                <td id="recordId">Loading...</td>
+            </tr>
+            <tr>
+                <td>Employee</td>
+                <td id="employee">Loading...</td>
+            </tr>
+            <tr>
+                <td>Leave Type</td>
+                <td id="leaveType">Loading...</td>
+            </tr>
+            <tr>
+                <td>Start Date</td>
+                <td id="startDate">Loading...</td>
+            </tr>
+            <tr>
+                <td>End Date</td>
+                <td id="endDate">Loading...</td>
+            </tr>
+            <tr>
+                <td>Reason</td>
+                <td id="reason">Loading...</td>
+            </tr>
+            <tr>
+                <td>Status</td>
+                <td id="status">Loading...</td>
+            </tr>
+        </table>
+        
+        <div class="loading" id="loading">
+            <p>⏳ Processing your request...</p>
+        </div>
+        
+        <div class="message" id="message"></div>
+        
+        <div class="button-group" id="buttonGroup">
+            <button class="approve-btn" onclick="handleAction('approve')">
+                <span>✅</span> APPROVE
+            </button>
+            <button class="reject-btn" onclick="handleAction('reject')">
+                <span>❌</span> REJECT
+            </button>
+        </div>
+        
+        <div class="record-id" id="recordIdDisplay"></div>
+    </div>
+    
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const recordId = urlParams.get('id');
+        const token = urlParams.get('token');
+        
+        // Load record details on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!recordId) {
+                showMessage('Invalid request - missing record ID', 'error');
+                document.getElementById('buttonGroup').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('recordIdDisplay').textContent = `Record ID: ${recordId}`;
+            
+            // Fetch record details from Salesforce
+            try {
+                // For now, just show the record ID
+                // In production, you'd fetch full details from Salesforce
+                document.getElementById('recordId').textContent = recordId;
+                document.getElementById('employee').textContent = 'Loading from Salesforce...';
+                document.getElementById('leaveType').textContent = 'Loading from Salesforce...';
+                document.getElementById('startDate').textContent = 'Loading from Salesforce...';
+                document.getElementById('endDate').textContent = 'Loading from Salesforce...';
+                document.getElementById('reason').textContent = 'Loading from Salesforce...';
+                document.getElementById('status').textContent = 'Pending';
+            } catch (error) {
+                console.error('Error loading details:', error);
+            }
+        });
+        
+        async function handleAction(action) {
+            if (!recordId || !token) {
+                showMessage('Invalid request parameters', 'error');
+                return;
+            }
+            
+            // Disable buttons and show loading
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('message').style.display = 'none';
+            
+            try {
+                const response = await fetch(`/approve?id=${recordId}&action=${action}&token=${token}`);
+                
+                if (response.ok) {
+                    const html = await response.text();
+                    // Replace entire page with success/error page
+                    document.open();
+                    document.write(html);
+                    document.close();
+                } else {
+                    throw new Error('Failed to process request');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`Failed to ${action} the request. Please try again.`, 'error');
+                buttons.forEach(btn => btn.disabled = false);
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

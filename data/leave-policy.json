@@ -1,0 +1,49 @@
+{
+  "companyName": "Winfomi Technologies",
+  "effectiveDate": "2024-01-01",
+  "leaveTypes": {
+    "annual": {
+      "name": "Annual Leave",
+      "entitlement": 21,
+      "accrualRate": "1.75 days per month",
+      "carryForward": "Maximum 5 days to next year",
+      "encashment": "Available for unused leaves above 15 days"
+    },
+    "sick": {
+      "name": "Sick Leave",
+      "entitlement": 12,
+      "documentation": "Medical certificate required for 3+ consecutive days",
+      "carryForward": "Not allowed"
+    },
+    "casual": {
+      "name": "Casual Leave",
+      "entitlement": 12,
+      "minimumNotice": "1 day advance notice required",
+      "restrictions": "Maximum 3 consecutive days without prior approval"
+    },
+    "maternity": {
+      "name": "Maternity Leave",
+      "entitlement": 180,
+      "eligibility": "Female employees after 1 year of service",
+      "benefits": "Full pay for 26 weeks"
+    },
+    "paternity": {
+      "name": "Paternity Leave",
+      "entitlement": 15,
+      "eligibility": "Male employees after 6 months of service",
+      "timeframe": "Within 6 months of child birth"
+    }
+  },
+  "applicationProcess": {
+    "advance": "Minimum 2 days notice for planned leaves",
+    "emergency": "Apply within 24 hours with valid reason",
+    "approval": "Immediate supervisor approval required",
+    "documentation": "Leave application form through People Portal"
+  },
+  "policies": {
+    "probation": "No leaves during first 3 months except emergency",
+    "sandwich": "Public holidays between leaves count as leave days",
+    "halfDay": "Available in 0.5 day increments",
+    "compensation": "Overtime cannot be compensated with comp-offs"
+  }
+}

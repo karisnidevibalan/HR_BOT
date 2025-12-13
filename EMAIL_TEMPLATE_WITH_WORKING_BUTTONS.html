@@ -1,0 +1,47 @@
+<html>
+<body style="font-family: Arial, sans-serif;">
+  <h2>Leave Request Pending Approval</h2>
+  
+  <p>Hello,</p>
+  
+  <p>You have a new leave request pending your approval.</p>
+  
+  <table style="border-collapse: collapse; margin: 20px 0;">
+    <tr>
+      <td style="padding: 8px; font-weight: bold;">Employee:</td>
+      <td style="padding: 8px;">{!Leave_Request__c.Employee_Name__c}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-weight: bold;">Leave Type:</td>
+      <td style="padding: 8px;">{!Leave_Request__c.Leave_Type__c}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-weight: bold;">From:</td>
+      <td style="padding: 8px;">{!Leave_Request__c.Start_Date__c}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-weight: bold;">To:</td>
+      <td style="padding: 8px;">{!Leave_Request__c.End_Date__c}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-weight: bold;">Reason:</td>
+      <td style="padding: 8px;">{!Leave_Request__c.Reason__c}</td>
+    </tr>
+  </table>
+  
+  <p style="margin: 30px 0;">
+    <a href="http://localhost:5000/approve?id={!Leave_Request__c.Id}&action=approve&token={!Leave_Request__c.Id}" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin-right: 10px;">
+      ✅ APPROVE
+    </a>
+    <a href="http://localhost:5000/approve?id={!Leave_Request__c.Id}&action=reject&token={!Leave_Request__c.Id}" style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+      ❌ REJECT
+    </a>
+  </p>
+  
+  <p style="color: #666; font-size: 14px; font-style: italic;">Click the button above to approve or reject this leave request instantly.</p>
+  
+  <p>Or view in Salesforce: <a href="https://winfomi--dev7.sandbox.my.salesforce.com/{!Leave_Request__c.Id}">{!Leave_Request__c.Name}</a></p>
+  
+  <p>Thank you,<br/>HR Team</p>
+</body>
+</html>

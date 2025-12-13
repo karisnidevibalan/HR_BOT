@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - Winfomi HR</title>
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .stats-card {
+            display: inline-block;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            margin-right: 12px;
+        }
+        .requests-grid {
+            display: grid;
+            gap: 16px;
+        }
+        .request-item {
+            background: white;
+            border: 1px solid #e6edf3;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+        .request-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .employee-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #07203a;
+        }
+        .request-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .request-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .detail-item {
+            font-size: 14px;
+        }
+        .detail-label {
+            color: #6b7280;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .detail-value {
+            color: #07203a;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+        .reason-text {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 16px;
+        }
+        .action-btns {
+            display: flex;
+            gap: 12px;
+        }
+        .btn-review {
+            flex: 1;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-approve-quick {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            color: #0f5132;
+        }
+        .btn-reject-quick {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .btn-view-details {
+            background: #3b82f6;
+            color: white;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="dashboard-header">
+                <div>
+                    <h1>👔 Manager Dashboard</h1>
+                    <p>Review and approve pending leave requests</p>
+                </div>
+                <div>
+                    <span class="stats-card" id="pendingCount">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="requestsList" class="requests-grid">
+            <div class="loading">⏳ Loading pending requests...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadPendingRequests() {
+            try {
+                const response = await fetch('/api/manager/pending');
+                const data = await response.json();
+
+                const container = document.getElementById('requestsList');
+                const countBadge = document.getElementById('pendingCount');
+
+                if (data.success && data.requests && data.requests.length > 0) {
+                    countBadge.textContent = `${data.requests.length} Pending`;
+                    
+                    container.innerHTML = data.requests.map(req => {
+                        const id = req.Id || req.id;
+                        const empName = req.Employee_Name__c || req.employeeName || 'Unknown';
+                        const leaveType = req.Leave_Type__c || req.leaveType || 'N/A';
+                        const startDate = req.Start_Date__c || req.startDate;
+                        const endDate = req.End_Date__c || req.endDate;
+                        const reason = req.Reason__c || req.reason || 'No reason provided';
+                        const source = req.Request_Source__c || 'N/A';
+                        
+                        const startFormatted = startDate ? new Date(startDate).toLocaleDateString() : '—';
+                        const endFormatted = endDate ? new Date(endDate).toLocaleDateString() : '—';
+                        
+                        return `
+                            <div class="request-item">
+                                <div class="request-header">
+                                    <div class="employee-name">${empName}</div>
+                                    <span class="request-badge badge-pending">Pending</span>
+                                </div>
+                                
+                                <div class="request-details">
+                                    <div class="detail-item">
+                                        <div class="detail-label">Leave Type</div>
+                                        <div class="detail-value">${leaveType}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Start Date</div>
+                                        <div class="detail-value">${startFormatted}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">End Date</div>
+                                        <div class="detail-value">${endFormatted}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Request Source</div>
+                                        <div class="detail-value">${source}</div>
+                                    </div>
+                                </div>
+
+                                <div class="reason-text">
+                                    <strong>Reason:</strong> ${reason}
+                                </div>
+
+                                <div class="action-btns">
+                                    <button class="btn-review btn-approve-quick" onclick="quickApprove('${id}')">
+                                        ✅ Approve
+                                    </button>
+                                    <button class="btn-review btn-reject-quick" onclick="quickReject('${id}')">
+                                        ❌ Reject
+                                    </button>
+                                    <button class="btn-review btn-view-details" onclick="viewDetails('${id}')">
+                                        📋 Details
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    countBadge.textContent = '0 Pending';
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h2>🎉 All caught up!</h2>
+                            <p>No pending leave requests at the moment.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading requests:', error);
+                document.getElementById('requestsList').innerHTML = `
+                    <div class="empty-state">
+                        <h2>❌ Error loading requests</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function quickApprove(requestId) {
+            if (!confirm('Approve this leave request?')) return;
+            
+            try {
+                const response = await fetch(`/api/manager/approve/${requestId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        managerComments: 'Approved from dashboard',
+                        managerName: 'Manager'
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Request approved successfully!');
+                    loadPendingRequests(); // Reload the list
+                } else {
+                    alert('❌ Failed to approve: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function quickReject(requestId) {
+            const reason = prompt('Enter rejection reason:');
+            if (!reason) return;
+            
+            try {
+                const response = await fetch(`/api/manager/reject/${requestId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        managerComments: reason,
+                        managerName: 'Manager'
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Request rejected');
+                    loadPendingRequests(); // Reload the list
+                } else {
+                    alert('❌ Failed to reject: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        function viewDetails(requestId) {
+            window.location.href = `/manager-approval.html?id=${requestId}`;
+        }
+
+        // Load pending requests on page load
+        window.onload = loadPendingRequests;
+    </script>
+</body>
+</html>
