@@ -1,15 +1,64 @@
 // Mock Salesforce Service for Demo
 import jsforce from 'jsforce';
 
+interface MockLeaveRecord {
+    Id: string;
+    Employee_Name__c: string;
+    Employee_Email__c: string | null;
+    Leave_Type__c: string;
+    Start_Date__c: string;
+    End_Date__c: string;
+    Reason__c: string;
+    Status__c: string;
+    Created_Date__c: string;
+    Manager_Approval__c: boolean;
+}
+
+interface MockWfhRecord {
+    Id: string;
+    Name: string;
+    Employee_Name__c: string;
+    email__c: string | null;
+    Employee__c: string | null;
+    Date__c: string;
+    Reason__c: string | null;
+    Status__c: string;
+    Created_Date__c: string;
+    Manager_approval__c: boolean;
+}
+
+interface MockReimbursementRecord {
+    Id: string;
+    Employee_Name__c: string;
+    Amount__c: number;
+    Category__c: string;
+    Receipt_Reference__c: string | null;
+    Description__c: string | null;
+    Expense_Date__c: string;
+    Status__c: string;
+    Created_Date__c: string;
+}
+
 export class SalesforceService {
-    private mockDatabase: any[] = [];
+    private mockLeaveRecords: MockLeaveRecord[] = [];
+    private mockWfhRecords: MockWfhRecord[] = [];
+    private mockReimbursements: MockReimbursementRecord[] = [];
     private nextId = 1;
     private demoMode: boolean;
     private conn: any;
+    private mockLeaveBalances: Record<string, { total: number; used: number }>;
 
     constructor(instanceUrl?: string, accessToken?: string) {
         this.demoMode = process.env.DEMO_MODE === 'true';
         console.log('🔧 Salesforce Service initialized in', this.demoMode ? 'DEMO MODE' : 'LIVE MODE');
+
+        this.mockLeaveBalances = {
+            'ANNUAL': { total: 21, used: 0 },
+            'CASUAL': { total: 12, used: 0 },
+            'SICK': { total: 12, used: 0 },
+            'MATERNITY': { total: 180, used: 0 },
+            'PATERNITY': { total: 15, used: 0 }
+        };
         
         // Initialize Salesforce connection for live mode
         if (!this.demoMode) {
@@ -45,7 +94,7 @@ export class SalesforceService {
 
     private initializeDemoData(): void {
         // Add a pre-existing leave for testing overlap detection
-        this.mockDatabase.push({
+        this.mockLeaveRecords.push({
             Id: `LEAVE_${this.nextId++}`,
             Employee_Name__c: 'Current User',
             Employee_Email__c: null,
@@ -57,6 +106,7 @@ export class SalesforceService {
             Created_Date__c: new Date().toISOString(),
             Manager_Approval__c: true
         });
+        this.applyMockLeaveUsage('ANNUAL', '2025-12-18', '2025-12-22');
         console.log('📋 Demo data initialized: 1 existing leave record (18-22 Dec 2025)');
     }
 
@@ -142,7 +192,8 @@ export class SalesforceService {
             Manager_Approval__c: false
         };
 
-        this.mockDatabase.push(record);
+        this.mockLeaveRecords.push(record);
+        this.applyMockLeaveUsage(leaveData.leaveType, leaveData.startDate, leaveData.endDate);
         
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -170,25 +221,36 @@ export class SalesforceService {
                 throw new Error('Salesforce authentication failed');
             }
 
-            // WFH requests are stored as Leave_Request__c with type 'Work From Home'
-            const recordData: any = {
-                Employee_Name__c: wfhData.employeeName,
-                Leave_Type__c: 'Work From Home',
-                Start_Date__c: wfhData.date,
-                End_Date__c: wfhData.date,
-                Reason__c: wfhData.reason,
-                Status__c: 'Pending',
-                Request_Source__c: 'Chatbot'
-            };
-
-            if (wfhData.employeeEmail) {
-                recordData.Employee_Email__c = wfhData.employeeEmail;
+            const normalizedDate = this.toSoqlDateLiteral(wfhData.date);
+            if (!normalizedDate) {
+                throw new Error('Invalid WFH date provided');
             }
 
-            const result = await this.conn.sobject('Leave_Request__c').create(recordData);
+            const employeeId = await this.lookupUserIdByEmail(wfhData.employeeEmail);
+
+            const recordData: any = {
+                Name: this.buildWfhRecordName(wfhData.employeeName, normalizedDate),
+                Date__c: normalizedDate,
+                Status__c: 'Pending Approval',
+                Manager_approval__c: false
+            };
+
+            if (wfhData.reason) {
+                recordData.Reason__c = wfhData.reason;
+            }
+
+            if (wfhData.employeeEmail) {
+                recordData.email__c = wfhData.employeeEmail;
+            }
+
+            if (employeeId) {
+                recordData.Employee__c = employeeId;
+            }
+
+            const result = await this.conn.sobject('WFH__c').create(recordData);
 
             console.log('✅ Real Salesforce WFH Record Created:', result.id);
-            console.log('📋 Salesforce will handle email notifications via Flow/Process Builder');
+            console.log('📋 Manager approval flow should be triggered from WFH__c automations');
 
             return {
                 success: true,
@@ -207,19 +269,24 @@ export class SalesforceService {
     }
 
     private async createMockWFHRecord(wfhData: any): Promise<any> {
-        // WFH is auto-approved for everyone in demo
-        const record = {
+        // Mirror the new approval workflow even in demo mode
+        const normalizedDate = this.toSoqlDateLiteral(wfhData.date) || wfhData.date;
+        const generatedName = `WFH - ${wfhData.employeeName || 'Employee'} - ${normalizedDate}`;
+
+        const record: MockWfhRecord = {
             Id: `WFH_${this.nextId++}`,
+            Name: generatedName,
             Employee_Name__c: wfhData.employeeName,
-            Employee_Email__c: wfhData.employeeEmail || null,
-            Work_From_Home_Date__c: wfhData.date,
+            email__c: wfhData.employeeEmail || null,
+            Employee__c: null,
+            Date__c: normalizedDate,
             Reason__c: wfhData.reason,
-            Status__c: 'Approved', // Auto-approve WFH in demo
+            Status__c: 'Pending Approval',
             Created_Date__c: new Date().toISOString(),
-            Manager_Approval__c: true
+            Manager_approval__c: false
         };
 
-        this.mockDatabase.push(record);
+        this.mockWfhRecords.push(record);
         
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -241,7 +308,7 @@ export class SalesforceService {
     }
 
     private getMockRecord(recordId: string): any {
-        const record = this.mockDatabase.find(r => r.Id === recordId);
+        const record = [...this.mockLeaveRecords, ...this.mockWfhRecords, ...this.mockReimbursements].find(r => r.Id === recordId);
         
         if (record) {
             return { success: true, record };
@@ -259,15 +326,26 @@ export class SalesforceService {
 
             console.log(`🔍 Querying Salesforce for record: ${recordId}`);
 
-            const result = await this.conn.sobject('Leave_Request__c').retrieve(recordId);
+            const candidateObjects = ['Leave_Request__c', 'WFH__c'];
 
-            if (result && result.Id) {
-                console.log(`✅ Record found:`, result);
-                return { success: true, record: result };
-            } else {
-                console.log(`❌ Record not found: ${recordId}`);
-                return { success: false, message: 'Record not found' };
+            for (const objectName of candidateObjects) {
+                try {
+                    const result = await this.conn.sobject(objectName).retrieve(recordId);
+                    if (result && result.Id) {
+                        console.log(`✅ Record found in ${objectName}:`, result);
+                        return { success: true, record: result };
+                    }
+                } catch (objectError: any) {
+                    if (!this.isMissingRecordError(objectError)) {
+                        console.error(`❌ Salesforce query error for ${objectName}:`, objectError);
+                        return { success: false, message: objectError.message };
+                    }
+                    // Not found in this object, continue to next
+                }
             }
+
+            console.log(`❌ Record not found: ${recordId}`);
+            return { success: false, message: 'Record not found' };
 
         } catch (error: any) {
             console.error('❌ Salesforce query error:', error);
@@ -276,7 +354,24 @@ export class SalesforceService {
     }
 
     getAllRecords(): any[] {
-        return this.mockDatabase;
+        return [...this.mockLeaveRecords, ...this.mockWfhRecords, ...this.mockReimbursements];
+    }
+
+    async getLeaveBalance(employeeEmail: string | undefined, leaveType: string): Promise<{ total: number; used: number; remaining: number; leaveType: string }> {
+        if (this.demoMode) {
+            return this.getMockLeaveBalance(leaveType);
+        }
+
+        // TODO: Replace with real Salesforce integration
+        return this.getMockLeaveBalance(leaveType);
+    }
+
+    async checkLeaveBalance(employeeEmail: string | undefined, leaveType: string, requestedDays: number): Promise<{ total: number; used: number; remaining: number; leaveType: string; isAvailable: boolean }> {
+        const balance = await this.getLeaveBalance(employeeEmail, leaveType);
+        return {
+            ...balance,
+            isAvailable: balance.remaining >= requestedDays
+        };
     }
 
     // Update record status (for manager approval)
@@ -339,16 +434,33 @@ export class SalesforceService {
     }
 
     private updateMockRecordStatus(recordId: string, status: string): any {
-        const record = this.mockDatabase.find(r => r.Id === recordId);
-        
-        if (record) {
-            record.Status__c = status;
-            record.Manager_Approval__c = status === 'Approved';
-            console.log(`✅ Mock record ${recordId} updated to ${status}`);
+        const leaveRecord = this.mockLeaveRecords.find(r => r.Id === recordId);
+        if (leaveRecord) {
+            leaveRecord.Status__c = status;
+            leaveRecord.Manager_Approval__c = status === 'Approved';
+            if (status === 'Cancelled' || status === 'Rejected') {
+                this.restoreMockLeaveUsage(leaveRecord.Leave_Type__c, leaveRecord.Start_Date__c, leaveRecord.End_Date__c);
+            }
+            console.log(`✅ Mock leave record ${recordId} updated to ${status}`);
             return { success: true, id: recordId, status };
-        } else {
-            return { success: false, message: 'Record not found' };
         }
+
+        const wfhRecord = this.mockWfhRecords.find(r => r.Id === recordId);
+        if (wfhRecord) {
+            wfhRecord.Status__c = status;
+            wfhRecord.Manager_approval__c = status === 'Approved';
+            console.log(`✅ Mock WFH record ${recordId} updated to ${status}`);
+            return { success: true, id: recordId, status };
+        }
+
+        const reimbursement = this.mockReimbursements.find(r => r.Id === recordId);
+        if (reimbursement) {
+            reimbursement.Status__c = status;
+            console.log(`✅ Mock reimbursement ${recordId} updated to ${status}`);
+            return { success: true, id: recordId, status };
+        }
+
+        return { success: false, message: 'Record not found' };
     }
 
     // Check for existing leave that overlaps with requested dates
@@ -369,22 +481,35 @@ export class SalesforceService {
             }
 
             // Query Salesforce for overlapping leave records
-            const query = `
-                SELECT Id, Employee_Name__c, Leave_Type__c, Start_Date__c, End_Date__c, Reason__c, Status__c
-                FROM Leave_Request__c
-                WHERE Employee_Name__c = '${employeeName}'
-                AND Status__c != 'Rejected'
-                AND (
-                    (Start_Date__c <= ${endDate} AND End_Date__c >= ${startDate})
-                )
-            `;
+            const startDateLiteral = this.toSoqlDateLiteral(startDate);
+            const endDateLiteral = this.toSoqlDateLiteral(endDate);
 
-            const result = await this.conn.query(query);
+            if (!startDateLiteral || !endDateLiteral) {
+                console.warn('⚠️ Invalid date supplied for overlap check, skipping query');
+                return { hasOverlap: false, overlappingLeaves: [] };
+            }
 
-            if (result.records && result.records.length > 0) {
+            const results = await this.conn.sobject('Leave_Request__c')
+                .find({
+                    Employee_Name__c: employeeName,
+                    Status__c: { $ne: 'Rejected' },
+                    Start_Date__c: { $lte: endDateLiteral },
+                    End_Date__c: { $gte: startDateLiteral }
+                }, [
+                    'Id',
+                    'Leave_Type__c',
+                    'Start_Date__c',
+                    'End_Date__c',
+                    'Reason__c',
+                    'Status__c'
+                ])
+                .limit(5)
+                .execute();
+
+            if (Array.isArray(results) && results.length > 0) {
                 return {
                     hasOverlap: true,
-                    overlappingLeaves: result.records.map((leave: any) => ({
+                    overlappingLeaves: results.map((leave: any) => ({
                         id: leave.Id,
                         leaveType: leave.Leave_Type__c,
                         startDate: leave.Start_Date__c,
@@ -404,6 +529,109 @@ export class SalesforceService {
         }
     }
 
+    private applyMockLeaveUsage(leaveType: string, startDate: string, endDate: string): void {
+        if (!leaveType || !startDate) {
+            return;
+        }
+
+        const key = leaveType.toUpperCase();
+        if (!this.mockLeaveBalances[key]) {
+            this.mockLeaveBalances[key] = { total: 12, used: 0 };
+        }
+
+        const duration = this.calculateDurationInDays(startDate, endDate || startDate);
+        if (duration <= 0) {
+            return;
+        }
+
+        const balance = this.mockLeaveBalances[key];
+        balance.used = Math.min(balance.total, balance.used + duration);
+    }
+
+    private toSoqlDateLiteral(inputDate: string): string | null {
+        if (!inputDate) {
+            return null;
+        }
+
+        const parsed = new Date(inputDate);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+
+        const isoDate = parsed.toISOString().split('T')[0];
+        return isoDate.replace(/[^0-9-]/g, '') || null;
+    }
+
+    private buildWfhRecordName(employeeName: string | undefined, isoDate: string): string {
+        const trimmedName = employeeName && employeeName.trim().length > 0 ? employeeName.trim() : 'Employee';
+        return `WFH - ${trimmedName} - ${isoDate}`;
+    }
+
+    private async lookupUserIdByEmail(email?: string | null): Promise<string | null> {
+        if (!email || this.demoMode || !this.conn) {
+            return null;
+        }
+
+        try {
+            const user = await this.conn.sobject('User').findOne({ Email: email }, ['Id']);
+            return user?.Id || null;
+        } catch (error: any) {
+            console.warn(`⚠️ Unable to resolve Salesforce User for email ${email}:`, error?.message || error);
+            return null;
+        }
+    }
+
+    private isMissingRecordError(error: any): boolean {
+        if (!error) {
+            return false;
+        }
+
+        const normalisedError = Array.isArray(error) ? error[0] : error;
+        const code = normalisedError?.errorCode || normalisedError?.code;
+
+        return code === 'NOT_FOUND' || code === 'INVALID_ID_FIELD' || code === 'INVALID_TYPE' || code === 'ENTITY_IS_DELETED';
+    }
+
+    private calculateDurationInDays(startDate: string, endDate: string): number {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+            return 0;
+        }
+
+        const diffInMs = end.getTime() - start.getTime();
+        const diffInDays = Math.floor(diffInMs / (24 * 60 * 60 * 1000));
+        return diffInDays >= 0 ? diffInDays + 1 : 0;
+    }
+
+    private restoreMockLeaveUsage(leaveType: string, startDate: string, endDate: string): void {
+        const key = leaveType?.toUpperCase();
+        if (!key || !this.mockLeaveBalances[key]) {
+            return;
+        }
+
+        const duration = this.calculateDurationInDays(startDate, endDate || startDate);
+        if (duration <= 0) {
+            return;
+        }
+
+        const balance = this.mockLeaveBalances[key];
+        balance.used = Math.max(0, balance.used - duration);
+    }
+
+    private getMockLeaveBalance(leaveType: string) {
+        const key = (leaveType || 'CASUAL').toUpperCase();
+        const balance = this.mockLeaveBalances[key] || { total: 12, used: 0 };
+        const remaining = Math.max(0, balance.total - balance.used);
+        return {
+            total: balance.total,
+            used: balance.used,
+            remaining,
+            leaveType: key
+        };
+    }
+
     private async checkMockLeaveOverlap(employeeName: string, startDate: string, endDate: string): Promise<any> {
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -412,7 +640,7 @@ export class SalesforceService {
         const requestEnd = new Date(endDate);
         
         // Find all leave records for this employee
-        const employeeLeaves = this.mockDatabase.filter(record => 
+        const employeeLeaves = this.mockLeaveRecords.filter(record => 
             record.Employee_Name__c === employeeName && 
             record.Leave_Type__c && // Has leave type, so it's a leave record
             record.Start_Date__c && 

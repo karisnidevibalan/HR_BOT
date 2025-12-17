@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AiService } from '../services/aiService';
 import { SalesforceService } from '../services/salesforceService';
-import dateParser from '../utils/dateParser';
+import dateParser from '../services/dateParser';
 import entityExtractor from '../utils/entityExtractor';
 import contextManager from '../utils/contextManager';
 
@@ -10,6 +10,103 @@ const salesforceService = new SalesforceService();
 
 function getSessionId(req: Request): string {
   return req.headers['x-session-id'] as string || 'default-session';
+}
+
+const ALLOW_PAST_DATES = process.env.ALLOW_BACKDATED_LEAVE === 'true';
+const DEFAULT_EMPLOYEE_NAME = 'Current User';
+
+function extractLeaveType(message: string): string | null {
+  const lower = message.toLowerCase();
+  const keywordMap: Record<string, string> = {
+    annual: 'ANNUAL',
+    vacation: 'ANNUAL',
+    holiday: 'ANNUAL',
+    travel: 'ANNUAL',
+    sick: 'SICK',
+    medical: 'SICK',
+    fever: 'SICK',
+    flu: 'SICK',
+    ill: 'SICK',
+    casual: 'CASUAL',
+    maternity: 'MATERNITY',
+    pregnancy: 'MATERNITY',
+    pregnant: 'MATERNITY',
+    paternity: 'PATERNITY'
+  };
+
+  for (const [keyword, type] of Object.entries(keywordMap)) {
+    if (lower.includes(keyword)) {
+      return type;
+    }
+  }
+
+  if (lower.match(/\b(baby|newborn|fatherhood)\b/)) {
+    return 'PATERNITY';
+  }
+
+  if (lower.match(/\b(wedding|marriage|family event|personal)\b/)) {
+    return 'CASUAL';
+  }
+
+  return null;
+}
+
+function cleanReason(reason: string): string | null {
+  const cleaned = reason
+    .replace(/\b(apply|request|requesting|need|want|for|because of|because)\b/gi, '')
+    .replace(/\bleave\b/gi, '')
+    .replace(/\bon\b/gi, '')
+    .replace(/\bfrom\b/gi, '')
+    .replace(/\bthe\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length < 3) {
+    return null;
+  }
+
+  return cleaned;
+}
+
+function extractReason(message: string): string | null {
+  const becauseMatch = message.match(/because\s+(.+?)(?:[.?!]|$)/i);
+  if (becauseMatch) {
+    const cleaned = cleanReason(becauseMatch[1]);
+    if (cleaned) {
+      return cleaned;
+    }
+  }
+
+  const forMatch = message.match(/for\s+(.+?)(?:\s+on|\s+from|\s+starting|\s+beginning|[.?!]|$)/i);
+  if (forMatch) {
+    const cleaned = cleanReason(forMatch[1]);
+    if (cleaned) {
+      return cleaned;
+    }
+  }
+
+  const lower = message.toLowerCase();
+  if (lower.match(/\b(sick|fever|flu|medical|doctor|clinic|hospital)\b/)) {
+    return 'Medical reasons';
+  }
+  if (lower.match(/\b(wedding|marriage|ceremony|family)\b/)) {
+    return 'Family event';
+  }
+  if (lower.match(/\b(travel|vacation|holiday|trip)\b/)) {
+    return 'Travel';
+  }
+
+  return null;
+}
+
+function calculateWorkingDays(startDate: string | null, endDate: string | null, isHalfDay = false): number | null {
+  if (!startDate) {
+    return null;
+  }
+
+  const effectiveEnd = endDate || startDate;
+  const total = dateParser.calculateInclusiveDays(startDate, effectiveEnd, isHalfDay);
+  return total > 0 ? total : null;
 }
 
 // Helper function to extract WFH details using enhanced extractor
@@ -30,15 +127,102 @@ async function processWfhRequest(details: { date: string | null, reason: string 
   });
 }
 
-// Helper function to extract leave details using enhanced extractor
-function extractLeaveDetails(message: string): { 
-  startDate: string | null, 
-  endDate: string | null, 
-  leaveType: string | null, 
-  reason: string | null, 
-  employeeName: string | null 
+// Helper function to extract leave details using DateParser service
+function extractLeaveDetails(message: string): {
+  startDate: string | null,
+  endDate: string | null,
+  leaveType: string | null,
+  reason: string | null,
+  employeeName: string | null,
+  durationDays?: number | null,
+  isHalfDay?: boolean,
+  errors?: string[]
 } {
-  return entityExtractor.extractLeaveDetails(message);
+  const parsedDates = dateParser.parseDates(message);
+  const durationInfo = dateParser.parseDuration(message);
+  const leaveType = extractLeaveType(message);
+  const reason = extractReason(message);
+
+  let startDate = parsedDates.startDate;
+  let endDate = parsedDates.endDate ?? parsedDates.startDate;
+
+  if (startDate && durationInfo.durationDays && (!endDate || durationInfo.hasExplicitDuration)) {
+    endDate = durationInfo.isHalfDay
+      ? startDate
+      : dateParser.projectEndDate(startDate, durationInfo.durationDays);
+  }
+
+  if (startDate && !endDate) {
+    endDate = startDate;
+  }
+
+  const errors = [...parsedDates.errors];
+  if (startDate && endDate) {
+    const startTime = new Date(startDate).getTime();
+    const endTime = new Date(endDate).getTime();
+    if (!Number.isNaN(startTime) && !Number.isNaN(endTime) && endTime < startTime) {
+      errors.push('End date cannot be earlier than start date.');
+    }
+  }
+
+  const durationDays = calculateWorkingDays(startDate ?? null, endDate ?? null, durationInfo.isHalfDay || false) ?? durationInfo.durationDays ?? null;
+
+  return {
+    startDate: startDate ?? null,
+    endDate: endDate ?? startDate ?? null,
+    leaveType,
+    reason,
+    employeeName: DEFAULT_EMPLOYEE_NAME,
+    durationDays,
+    isHalfDay: durationInfo.isHalfDay || durationDays === 0.5,
+    errors: errors.length ? Array.from(new Set(errors)) : undefined
+  };
+}
+
+function calculateInclusiveDays(startDate: string, endDate?: string | null): number {
+  const effectiveEnd = endDate ?? startDate;
+  return dateParser.calculateInclusiveDays(startDate, effectiveEnd);
+}
+
+function applyLeaveDefaults(details: { 
+  startDate: string | null,
+  endDate: string | null,
+  leaveType: string | null,
+  reason: string | null,
+  employeeName: string | null,
+  durationDays?: number | null,
+  isHalfDay?: boolean,
+  errors?: string[]
+}) {
+  if (details.startDate) {
+    if (details.isHalfDay) {
+      details.endDate = details.startDate;
+      details.durationDays = 0.5;
+    } else if (details.durationDays && details.durationDays > 0) {
+      if (!details.endDate || details.endDate === details.startDate) {
+        details.endDate = dateParser.projectEndDate(details.startDate, details.durationDays);
+      }
+    } else if (details.endDate) {
+      details.durationDays = calculateInclusiveDays(details.startDate, details.endDate);
+    } else {
+      details.endDate = details.startDate;
+      details.durationDays = 1;
+    }
+  }
+
+  if (!details.leaveType && details.startDate) {
+    details.leaveType = 'CASUAL';
+  }
+
+  if (!details.reason || details.reason.trim().length === 0) {
+    details.reason = 'Personal';
+  }
+
+  if (!details.employeeName) {
+    details.employeeName = DEFAULT_EMPLOYEE_NAME;
+  }
+
+  return details;
 }
 
 // Helper function to process leave request
@@ -76,17 +260,17 @@ async function processLeaveRequest(details: {
       success: false,
       isPastDate: true,
       requestedDate: details.startDate,
-      message: 'Cannot apply for leave on past dates'
+      message: 'Leave date is in the past'
     };
-  }
-  
+    }
+
   // Check for existing leave overlap
   const overlapCheck = await salesforceService.checkLeaveOverlap(
     employeeName,
     details.startDate,
     endDate
   );
-  
+
   if (overlapCheck.hasOverlap) {
     // Return overlap information instead of creating
     return {
@@ -95,7 +279,7 @@ async function processLeaveRequest(details: {
       overlappingLeaves: overlapCheck.overlappingLeaves
     };
   }
-  
+
   // No overlap, proceed with creating the leave
   console.log('🔍 Creating leave record with email:', userEmail);
   const recordData = {
@@ -104,30 +288,259 @@ async function processLeaveRequest(details: {
     startDate: details.startDate,
     endDate: endDate,
     reason: details.reason || 'Personal',
-    employeeEmail: userEmail  // Include email for Salesforce notifications
+    employeeEmail: userEmail
   };
   console.log('📦 Record data being sent:', JSON.stringify(recordData, null, 2));
-  
+
   return await salesforceService.createLeaveRecord(recordData);
+}
+
+function getRequestedLeaveDays(details: { startDate?: string | null; endDate?: string | null; durationDays?: number | null; isHalfDay?: boolean | null }): number | null {
+  if (typeof details.durationDays === 'number' && details.durationDays > 0) {
+    return details.durationDays;
+  }
+
+  if (details.startDate) {
+    const totalDays = dateParser.calculateInclusiveDays(details.startDate, details.endDate ?? details.startDate, Boolean(details.isHalfDay));
+    return totalDays > 0 ? totalDays : null;
+  }
+
+  return null;
+}
+
+async function enforceLeaveBalance(
+  sessionId: string,
+  details: { startDate?: string | null; endDate?: string | null; leaveType?: string | null; durationDays?: number | null },
+  res: Response
+): Promise<boolean> {
+  const requestedDays = getRequestedLeaveDays(details);
+  if (!requestedDays || requestedDays <= 0 || !details.leaveType) {
+    return false;
+  }
+
+  try {
+    const userEmail = contextManager.getUserEmail(sessionId);
+    const balance = await salesforceService.checkLeaveBalance(userEmail, details.leaveType, requestedDays);
+
+    if (balance && balance.isAvailable === false) {
+      const formatDays = (value: number) => (Number.isInteger(value) ? `${value}` : value.toFixed(1));
+      const response = `⚠️ Insufficient leave balance.
+
+  • Requested: ${formatDays(requestedDays)} day${requestedDays === 1 ? '' : 's'}
+  • Available: ${formatDays(balance.remaining)} day${balance.remaining === 1 ? '' : 's'}
+
+Please reduce the duration or choose a different leave type.`;
+
+      res.json({
+        reply: response,
+        intent: 'leave_balance_insufficient',
+        timestamp: new Date().toISOString()
+      });
+      return true;
+    }
+  } catch (error) {
+    console.error('Leave balance check failed:', error);
+  }
+
+  return false;
+}
+
+async function handleLeaveEditRequest(
+  sessionId: string,
+  pending: { details: any },
+  editDetails: any,
+  message: string,
+  res: Response
+): Promise<boolean> {
+  const detailsFromForm = editDetails && typeof editDetails === 'object' ? editDetails : null;
+  let newDetails: any = null;
+
+  if (detailsFromForm) {
+    const updatedStart = detailsFromForm.startDate || pending.details.startDate;
+    const updatedEnd = detailsFromForm.endDate || updatedStart || pending.details.endDate;
+    newDetails = {
+      ...pending.details,
+      leaveType: detailsFromForm.leaveType || pending.details.leaveType,
+      startDate: updatedStart,
+      endDate: updatedEnd,
+      reason: detailsFromForm.reason ?? pending.details.reason ?? 'Personal',
+      employeeName: pending.details.employeeName || 'You'
+    };
+  } else {
+    newDetails = extractLeaveDetails(message);
+    if (newDetails) {
+      newDetails = {
+        ...pending.details,
+        ...newDetails
+      };
+    }
+  }
+
+  if (newDetails) {
+    newDetails = applyLeaveDefaults(newDetails);
+  }
+
+  if (newDetails?.errors?.length) {
+    const primaryError = newDetails.errors[0];
+    const errorMessage = primaryError.includes('End date cannot be earlier than start date')
+      ? '❌ End date cannot be earlier than start date. Please adjust your dates.'
+      : `❌ ${primaryError}`;
+
+    res.json({
+      reply: `${errorMessage}
+
+Please provide corrected dates to continue editing your leave request.`,
+      intent: 'validation_error',
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  }
+
+  if (newDetails && newDetails.startDate && newDetails.leaveType) {
+    newDetails.reason = newDetails.reason || 'Personal';
+    if (await enforceLeaveBalance(sessionId, newDetails, res)) {
+      return true;
+    }
+    const { errors, ...pendingDetails } = newDetails;
+    contextManager.setPendingConfirmation(sessionId, 'leave', pendingDetails);
+
+    const reply = `📋 **Please confirm your UPDATED leave request:**
+
+• **Type**: ${pendingDetails.leaveType}
+• **Date**: ${pendingDetails.startDate}${pendingDetails.endDate && pendingDetails.endDate !== pendingDetails.startDate ? ' to ' + pendingDetails.endDate : ''}
+• **Reason**: ${pendingDetails.reason}
+
+Tap a button below when you're ready.`;
+
+    res.json({
+      reply,
+      intent: 'confirm_leave',
+      showButtons: true,
+      pendingRequest: { type: 'leave', details: pendingDetails },
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  }
+
+  const fallbackReply = `✏️ Got it! Let's update your leave request.
+
+**Current Details:**
+• Type: ${pending.details.leaveType}
+• Date: ${pending.details.startDate}${pending.details.endDate && pending.details.endDate !== pending.details.startDate ? ' to ' + pending.details.endDate : ''}
+• Reason: ${pending.details.reason || 'Personal'}
+
+**You can update any of these details:**
+• Change the type (Annual, Sick, Casual)
+• Change the date
+• Change the reason
+
+Please provide the complete NEW information. For example:
+"Casual leave on 20.12.2025 for family event"`;
+
+  res.json({
+    reply: fallbackReply,
+    intent: 'edit_request',
+    timestamp: new Date().toISOString()
+  });
+  return true;
+}
+
+function handleWfhEditRequest(
+  sessionId: string,
+  pending: { details: any },
+  editDetails: any,
+  message: string,
+  res: Response
+): boolean {
+  const detailsFromForm = editDetails && typeof editDetails === 'object' ? editDetails : null;
+  let newDetails: any = null;
+
+  if (detailsFromForm) {
+    newDetails = {
+      ...pending.details,
+      date: detailsFromForm.date || pending.details.date,
+      reason: detailsFromForm.reason ?? pending.details.reason ?? 'Personal',
+      employeeName: pending.details.employeeName || 'You'
+    };
+  } else {
+    newDetails = extractWfhDetails(message);
+    if (newDetails) {
+      newDetails = {
+        ...pending.details,
+        ...newDetails
+      };
+    }
+  }
+
+  if (newDetails && newDetails.date) {
+    newDetails.reason = newDetails.reason || 'Personal';
+    contextManager.setPendingConfirmation(sessionId, 'wfh', newDetails);
+
+    const reply = `📋 **Please confirm your UPDATED WFH request:**
+
+• **Date**: ${newDetails.date}
+• **Reason**: ${newDetails.reason}
+
+Tap a button below when you're ready.`;
+
+    res.json({
+      reply,
+      intent: 'confirm_wfh',
+      showButtons: true,
+      pendingRequest: { type: 'wfh', details: newDetails },
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  }
+
+  const fallbackReply = `✏️ Got it! Let's update your WFH request.
+
+**Current Details:**
+• Date: ${pending.details.date}
+• Reason: ${pending.details.reason || 'Personal'}
+
+Please provide the complete NEW information. For example:
+"WFH on 20.12.2025 for doctor appointment"`;
+
+  res.json({
+    reply: fallbackReply,
+    intent: 'edit_request',
+    timestamp: new Date().toISOString()
+  });
+  return true;
 }
 
 export const chatController = async (req: Request, res: Response) => {
   try {
-    const { message, context } = req.body;
+    const { message, context, editDetails, employeeEmail, confirmationAction, intentOverride } = req.body;
 
-    if (!message) {
+    if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     console.log('💬 Chat request:', message);
 
     const sessionId = getSessionId(req);
-    const sessionContext = contextManager.getContext(sessionId);
+
+    if (typeof employeeEmail === 'string' && employeeEmail.includes('@') && !contextManager.hasUserEmail(sessionId)) {
+      const trimmed = employeeEmail.trim();
+      if (trimmed.length > 3) {
+        contextManager.setUserEmail(sessionId, trimmed);
+        console.log('✅ Email received from client payload:', trimmed);
+      }
+    }
+
+    const normalizedConfirmationAction = typeof confirmationAction === 'string' ? confirmationAction.toLowerCase() : null;
+    const normalizedIntentOverride = typeof intentOverride === 'string' ? intentOverride.toLowerCase() : null;
+    const shouldSkipHistory = normalizedConfirmationAction === 'yes' || normalizedConfirmationAction === 'no';
+
     const lowerMessage = message.toLowerCase();
     let response = '';
 
     // Add to conversation history
-    contextManager.addToHistory(sessionId, message, 'unknown');
+    if (!shouldSkipHistory) {
+      contextManager.addToHistory(sessionId, message, 'unknown');
+    }
 
     // First-time user: Ask for email if not already collected
     if (!contextManager.hasUserEmail(sessionId) && !contextManager.isAwaitingEmail(sessionId)) {
@@ -209,9 +622,92 @@ Please provide your email in this format: name@company.com`;
     }
 
     // Check if user is responding to confirmation
-    if (contextManager.isAwaitingConfirmation(sessionId)) {
-      const confirmation = entityExtractor.extractConfirmation(message);
-      const pending = contextManager.getPendingConfirmation(sessionId);
+    if (typeof employeeEmail === 'string' && employeeEmail.includes('@') && !contextManager.hasUserEmail(sessionId)) {
+      const trimmed = employeeEmail.trim();
+      if (trimmed.length > 3) {
+        contextManager.setUserEmail(sessionId, trimmed);
+        console.log('✅ Email received from client payload:', trimmed);
+      }
+    }
+
+    const pendingConfirmation = contextManager.getPendingConfirmation(sessionId);
+    const confirmation = normalizedConfirmationAction || entityExtractor.extractConfirmation(message);
+
+    if (!pendingConfirmation && confirmation) {
+      const lastRequest = contextManager.getLastRequest(sessionId);
+
+      if (confirmation === 'yes') {
+        if (lastRequest) {
+          if (lastRequest.type === 'leave') {
+            return res.json({
+              reply: `✅ Leave request created successfully!
+
+Type: ${lastRequest.leaveType}
+Date: ${lastRequest.startDate}${lastRequest.endDate && lastRequest.endDate !== lastRequest.startDate ? ' to ' + lastRequest.endDate : ''}
+Reason: ${lastRequest.reason || 'Personal'}
+Status: Pending Approval
+
+Your manager has been notified and will review your request shortly.`,
+              intent: 'no_pending_confirmation',
+              timestamp: new Date().toISOString()
+            });
+          }
+
+          if (lastRequest.type === 'wfh') {
+            return res.json({
+              reply: `✅ WFH request created successfully!
+
+Date: ${lastRequest.date}
+Reason: ${lastRequest.reason || 'Personal'}
+Status: Pending Approval
+
+Your manager has been notified and will review your request shortly.`,
+              intent: 'no_pending_confirmation',
+              timestamp: new Date().toISOString()
+            });
+          }
+
+          return res.json({
+            reply: `✅ All set! Your last request is already completed.`,
+            intent: 'no_pending_confirmation',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        return res.json({
+          reply: `✅ All set! There's nothing awaiting confirmation.`,
+          intent: 'no_pending_confirmation',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (confirmation === 'no') {
+        return res.json({
+          reply: `ℹ️ Nothing was cancelled because there wasn't a pending request.`,
+          intent: 'no_pending_confirmation',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    if (pendingConfirmation) {
+      const pending = pendingConfirmation;
+      const isEditAction = normalizedIntentOverride === 'edit_leave' || normalizedIntentOverride === 'edit_wfh' || entityExtractor.isEditRequest(message);
+
+      if (isEditAction && pending) {
+        console.log('🔧 Edit request detected, pending type:', pending.type);
+
+        if (pending.type === 'leave') {
+          const handled = await handleLeaveEditRequest(sessionId, pending, editDetails, message, res);
+          if (handled) {
+            return;
+          }
+        } else if (pending.type === 'wfh') {
+          if (handleWfhEditRequest(sessionId, pending, editDetails, message, res)) {
+            return;
+          }
+        }
+      }
       
       if (confirmation === 'yes' && pending) {
         // User confirmed - now create the record
@@ -273,20 +769,16 @@ You already have ${overlapping.status.toLowerCase()} leave from **${overlapping.
               
               response = `✅ Leave request created successfully!
 
-📋 Summary:
-• Request ID: ${leaveResult.id}
-• Employee: ${pending.details.employeeName || 'You'}
-• Type: ${pending.details.leaveType}
-• Date: ${pending.details.startDate}${pending.details.endDate && pending.details.endDate !== pending.details.startDate ? ' to ' + pending.details.endDate : ''}
-• Reason: ${pending.details.reason}
-• Status: Pending Approval
+Type: ${pending.details.leaveType}
+Date: ${pending.details.startDate}${pending.details.endDate && pending.details.endDate !== pending.details.startDate ? ' to ' + pending.details.endDate : ''}
+Reason: ${pending.details.reason}
+Status: Pending Approval
 
-Your manager will review this request shortly. You'll receive an email notification once it's processed.`;
+Your manager has been notified and will review your request shortly.`;
               
               return res.json({ 
                 reply: response,
                 intent: 'leave_created',
-                showActionButtons: true,
                 recordId: leaveResult.id,
                 timestamp: new Date().toISOString()
               });
@@ -303,7 +795,15 @@ Your manager will review this request shortly. You'll receive an email notificat
         } else if (pending.type === 'wfh') {
           // Similar logic for WFH
           try {
-            const wfhResult = await salesforceService.createWfhRecord(pending.details);
+            const userEmail = contextManager.getUserEmail(sessionId);
+            const wfhPayload = {
+              employeeName: pending.details.employeeName || DEFAULT_EMPLOYEE_NAME,
+              date: pending.details.date,
+              reason: pending.details.reason,
+              employeeEmail: userEmail || null
+            };
+
+            const wfhResult = await salesforceService.createWfhRecord(wfhPayload);
             contextManager.saveLastRequest(sessionId, {
               type: 'wfh',
               date: pending.details.date,
@@ -313,18 +813,15 @@ Your manager will review this request shortly. You'll receive an email notificat
             
             response = `✅ WFH request created successfully!
 
-📋 Summary:
-• Request ID: ${wfhResult.id}
-• Date: ${pending.details.date}
-• Reason: ${pending.details.reason}
-• Status: Pending Approval
+Date: ${pending.details.date}
+Reason: ${pending.details.reason}
+Status: Pending Approval
 
-Your manager will review this request shortly.`;
+Your manager has been notified and will review your request shortly.`;
             
             return res.json({ 
               reply: response,
               intent: 'wfh_created',
-              showActionButtons: true,
               recordId: wfhResult.id,
               timestamp: new Date().toISOString()
             });
@@ -359,7 +856,8 @@ Would you like to:
 
 Please reply with:
 • "Yes" or "Confirm" to submit the request
-• "No" or "Cancel" to cancel the request`;
+• "No" or "Cancel" to cancel the request
+• "Edit" to make changes`;
         
         return res.json({ 
           reply: response,
@@ -369,96 +867,29 @@ Please reply with:
       }
     }
 
-    // Check if user wants to edit/correct previous request
-    if (entityExtractor.isEditRequest(message) && contextManager.getLastRequest(sessionId)) {
+    if (!pendingConfirmation && (normalizedIntentOverride === 'edit_leave' || normalizedIntentOverride === 'edit_wfh')) {
+      return res.json({
+        reply: `ℹ️ There isn't any pending request to edit right now. Start a new request whenever you're ready.`,
+        intent: 'no_pending_confirmation',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Edit handler for AFTER record is created (when lastRequest exists but no pending confirmation)
+    if ((normalizedIntentOverride === 'edit_leave' || normalizedIntentOverride === 'edit_wfh' || entityExtractor.isEditRequest(message)) && contextManager.getLastRequest(sessionId) && !contextManager.isAwaitingConfirmation(sessionId)) {
       const lastReq = contextManager.getLastRequest(sessionId)!;
       
-      if (lastReq.type === 'leave') {
-        // Check if user is providing new complete details in the edit message
-        const newDetails = extractLeaveDetails(message);
-        
-        if (newDetails.startDate && newDetails.leaveType) {
-        // User provided complete new details - show confirmation
-        contextManager.clearLastRequest(sessionId);
-        contextManager.setPendingConfirmation(sessionId, 'leave', newDetails);
-        
-        response = `📋 **Please confirm your UPDATED leave request:**
+      response = `ℹ️ Your ${lastReq.type} request has already been submitted to Salesforce (ID: ${lastReq.recordId}).
 
-**Previous Details:**
-• Type: ${lastReq.leaveType}
-• Date: ${lastReq.startDate}${lastReq.endDate && lastReq.endDate !== lastReq.startDate ? ' to ' + lastReq.endDate : ''}
-• Reason: ${lastReq.reason}
+To modify an already submitted request, please:
+• Contact your manager directly
+• Or you can create a new ${lastReq.type} request
 
-**New Details:**
-• Type: ${newDetails.leaveType}
-• Date: ${newDetails.startDate}${newDetails.endDate && newDetails.endDate !== newDetails.startDate ? ' to ' + newDetails.endDate : ''}
-• Reason: ${newDetails.reason || 'Personal'}
-
-Is this correct?
-• Reply "Yes" or "Confirm" to update
-• Reply "No" or "Cancel" to keep the original`;
-        
-        res.json({ 
-          reply: response,
-          intent: 'confirm_edit',
-          timestamp: new Date().toISOString()
-        });
-        return;
-        }
-      } else if (lastReq.type === 'wfh') {
-        // Check if user is providing new complete details for WFH
-        const newDetails = entityExtractor.extractWfhDetails(message);
-        
-        if (newDetails.date) {
-          // User provided complete WFH details
-          contextManager.clearLastRequest(sessionId);
-          contextManager.setPendingConfirmation(sessionId, 'wfh', newDetails);
-        
-        response = `📋 **Please confirm your UPDATED WFH request:**
-
-**Previous Details:**
-• Date: ${lastReq.date}
-• Reason: ${lastReq.reason}
-
-**New Details:**
-• Date: ${newDetails.date}
-• Reason: ${newDetails.reason || 'Personal'}
-
-Is this correct?
-• Reply "Yes" or "Confirm" to update
-• Reply "No" or "Cancel" to keep the original`;
-        
-          res.json({ 
-            reply: response,
-            intent: 'confirm_edit',
-            timestamp: new Date().toISOString()
-          });
-          return;
-        }
-      }
-      
-      // If we get here, ask for complete new details
-      response = `✏️ Got it! Let's update your ${lastReq.type} request.
-
-**Current Details:**
-${lastReq.type === 'wfh' ? `• Date: ${lastReq.date}
-• Reason: ${lastReq.reason}` : `• Type: ${lastReq.leaveType}
-• Date: ${lastReq.startDate}${lastReq.endDate && lastReq.endDate !== lastReq.startDate ? ' to ' + lastReq.endDate : ''}
-• Reason: ${lastReq.reason}`}
-
-**You can update any of these details:**
-• Change the type (Annual, Sick, Casual, etc.)
-• Change the date/dates
-• Change the reason
-
-Please provide the complete NEW information. For example:
-${lastReq.type === 'wfh' ? 
-  '"WFH on 15.12.2025 for personal appointment"' : 
-  '"Casual leave on 15.12.2025 for family event"'}`;
+Would you like to create a new ${lastReq.type} request?`;
       
       res.json({ 
         reply: response,
-        intent: 'edit_request',
+        intent: 'edit_after_creation',
         timestamp: new Date().toISOString()
       });
       return;
@@ -519,25 +950,32 @@ Example: "Annual leave for family vacation" or "Sick leave for medical appointme
       if (leaveTypeMatch && awaitingLeaveDetails.clarifiedDate) {
         // User has provided type and we have the date - try to process
         const fullMessage = `${leaveTypeMatch[1]} leave on ${awaitingLeaveDetails.clarifiedDate} ${message.replace(leaveTypeMatch[0], '')}`;
-        const leaveDetails = extractLeaveDetails(fullMessage);
+        const leaveDetails = applyLeaveDefaults(extractLeaveDetails(fullMessage));
         
         if (leaveDetails.startDate && leaveDetails.leaveType) {
           // We have enough to show confirmation
+          if (await enforceLeaveBalance(sessionId, leaveDetails, res)) {
+            return;
+          }
           contextManager.clearAwaitingLeaveDetails(sessionId);
           
           // Save to pending confirmation instead of creating immediately
+          leaveDetails.reason = leaveDetails.reason || 'Personal';
           contextManager.setPendingConfirmation(sessionId, 'leave', leaveDetails);
           
           response = `📋 **Please confirm your leave request:**
 
 • **Type**: ${leaveDetails.leaveType}
 • **Date**: ${leaveDetails.startDate}${leaveDetails.endDate && leaveDetails.endDate !== leaveDetails.startDate ? ' to ' + leaveDetails.endDate : ''}
-• **Reason**: ${leaveDetails.reason || 'Personal'}`;
+• **Reason**: ${leaveDetails.reason || 'Personal'}
+
+Tap a button below when you're ready.`;
           
           res.json({ 
             reply: response,
             intent: 'confirm_leave',
             showButtons: true,
+            pendingRequest: { type: 'leave', details: leaveDetails },
             timestamp: new Date().toISOString()
           });
           return;
@@ -545,94 +983,97 @@ Example: "Annual leave for family vacation" or "Sick leave for medical appointme
       }
     }
 
-    // Check if user mentions existing/conflicting leave
-    const hasConflictMention = lowerMessage.includes('already have') || 
-                              lowerMessage.includes('have leave') || 
-                              lowerMessage.includes('existing leave') ||
-                              lowerMessage.includes('that week') ||
-                              lowerMessage.includes('same week');
-
     // Detect intent using enhanced AI service
+    if (shouldSkipHistory) {
+      return res.json({
+        reply: response || `✅ All set! There's nothing awaiting confirmation.`,
+        intent: 'confirmation_action',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const intent = aiService.detectIntent(message);
     
     // Update history with detected intent
-    const history = contextManager.getHistory(sessionId);
     contextManager.addToHistory(sessionId, message, intent);
 
     switch (intent) {
-      case 'apply_leave':
-        // Check if user is mentioning a conflict
-        if (hasConflictMention) {
-          // Save partial information from the message
-          const partialDetails = extractLeaveDetails(message);
-          contextManager.setAwaitingLeaveDetails(sessionId, {
-            partialDate: message.match(/\d{1,2}(th|st|nd|rd)?/)?.[0] || null,
-            hasConflict: true
-          });
-          
-          response = `⚠️ I understand you mentioned having existing leave that week. Let me help you check that.
+      case 'apply_leave': {
+        const leaveDetailsRaw = extractLeaveDetails(message);
+        const leaveDetails = applyLeaveDefaults({ ...leaveDetailsRaw });
 
-To verify and process your request for the 20th, please provide:
-1. **Complete Date**: Which month and year is the 20th? (e.g., "20th December", "January 20th", or "20-12-2025")
-2. **Leave Type**: Annual, Sick, Casual, Maternity, or Paternity
-3. **Reason**: Brief description
+        if (leaveDetails.errors && leaveDetails.errors.length) {
+          const primaryError = leaveDetails.errors[0];
+          const errorMessage = primaryError.includes('End date cannot be earlier than start date')
+            ? '❌ End date cannot be earlier than start date. Please adjust your dates.'
+            : `❌ ${primaryError}`;
+          response = `${errorMessage}
 
-Example: "Annual leave on 20th December 2025 for family event"
-
-💡 **Note**: I'll check for any existing leave and let you know if there's an overlap before creating a new request.`;
-        } else {
-          // Try to extract leave details from the message
-          const leaveDetails = extractLeaveDetails(message);
-        
-          if (leaveDetails.startDate && leaveDetails.leaveType && leaveDetails.reason) {
-            // We have enough info - show confirmation instead of creating immediately
-            contextManager.setPendingConfirmation(sessionId, 'leave', leaveDetails);
-            
-            response = `📋 **Please confirm your leave request:**
-
-• **Type**: ${leaveDetails.leaveType}
-• **Date**: ${leaveDetails.startDate}${leaveDetails.endDate && leaveDetails.endDate !== leaveDetails.startDate ? ' to ' + leaveDetails.endDate : ''}
-• **Reason**: ${leaveDetails.reason || 'Personal'}`;
-            
-            res.json({ 
-              reply: response,
-              intent: 'confirm_leave',
-              showButtons: true,
-              timestamp: new Date().toISOString()
-            });
-            return;
-          } else if (leaveDetails.startDate && leaveDetails.leaveType) {
-          // We have date and type but need reason
-          response = `📝 I understand you want ${leaveDetails.leaveType.toLowerCase()} leave on ${leaveDetails.startDate}. Could you please tell me the reason? For example: "for cousin's wedding" or "for medical appointment"`;
-        } else if (leaveDetails.startDate && leaveDetails.startDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          // We have a valid date but need type and reason
-          response = `📝 I understand you want leave on ${leaveDetails.startDate}. Please specify:
-1. **Leave Type**: Annual, Sick, Casual, Maternity, or Paternity
-2. **Reason**: Brief description
-
-Example: "Annual leave for family vacation"`;
-        } else {
-          // Need more info or date parsing failed
-          const hasDateHint = message.match(/\d{1,2}(th|st|nd|rd)?/);
-          if (hasDateHint) {
-            response = `📝 I noticed you mentioned a date, but I need more details to process your leave request:
-
-1. **Complete Date**: Please specify the full date (e.g., "20th December", "December 20", or "20-12-2025")
-2. **Leave Type**: Annual, Sick, Casual, Maternity, or Paternity
-3. **Reason**: Brief description
-
-Example: "Annual leave on 20th December 2025 for family event"`;
-          } else {
-            response = `🏖️ I can help you apply for leave! Please provide the following details:
-
-1. **Leave Type** (Annual, Sick, Casual, Maternity, Paternity)
-2. **Date** (when you need leave)
-3. **Reason** (brief description)
-
-Example: "Annual leave on December 25 for Christmas" or "Sick leave tomorrow for doctor appointment"`;
-          }
+Please correct the date and try again.`;
+          break;
         }
+
+        if (!leaveDetails.startDate) {
+          response = `🗓️ I couldn't find a date in your request.
+
+Please specify when the leave should start. Examples:
+• "Casual leave on December 20"
+• "Sick leave from 15th to 17th"`;
+          break;
         }
+
+        const employeeName = leaveDetails.employeeName || DEFAULT_EMPLOYEE_NAME;
+        const startDate = leaveDetails.startDate;
+        const endDate = leaveDetails.endDate ?? startDate;
+
+        if (!ALLOW_PAST_DATES && dateParser.isPastDate(startDate)) {
+          response = '❌ Cannot apply leave for past dates. Please choose a future date or contact your manager for assistance.';
+          break;
+        }
+
+        leaveDetails.leaveType = leaveDetails.leaveType || 'CASUAL';
+        leaveDetails.reason = leaveDetails.reason && leaveDetails.reason.trim().length > 0 ? leaveDetails.reason : 'Personal';
+
+        const overlapCheck = await salesforceService.checkLeaveOverlap(employeeName, startDate, endDate);
+        if (overlapCheck && overlapCheck.hasOverlap && overlapCheck.overlappingLeaves?.length) {
+          const conflict = overlapCheck.overlappingLeaves[0];
+          response = `⚠️ You already have ${conflict.status.toLowerCase()} ${conflict.leaveType} leave from ${conflict.startDate} to ${conflict.endDate}.
+
+Please adjust your new request or update the existing leave first.`;
+          break;
+        }
+
+        if (await enforceLeaveBalance(sessionId, leaveDetails, res)) {
+          return;
+        }
+
+        const { errors, ...pendingDetails } = leaveDetails;
+        const effectiveDuration = pendingDetails.durationDays ?? dateParser.calculateInclusiveDays(startDate, endDate, Boolean(pendingDetails.isHalfDay));
+        const formattedDuration = Number.isFinite(effectiveDuration)
+          ? (Number.isInteger(effectiveDuration) ? `${effectiveDuration}` : effectiveDuration.toFixed(1))
+          : '1';
+        const durationLabel = effectiveDuration === 0.5 ? 'Half day' : `${formattedDuration} day${effectiveDuration === 1 ? '' : 's'}`;
+
+        contextManager.setPendingConfirmation(sessionId, 'leave', pendingDetails);
+
+        response = `📋 **Please confirm your leave request:**
+
+• **Type**: ${pendingDetails.leaveType}
+• **Date**: ${startDate}${endDate && endDate !== startDate ? ' to ' + endDate : ''}
+• **Duration**: ${durationLabel}
+• **Reason**: ${pendingDetails.reason}
+
+Select an option below: [Confirm] [Edit] [Cancel].`;
+
+        res.json({
+          reply: response,
+          intent: 'confirm_leave',
+          showButtons: true,
+          pendingRequest: { type: 'leave', details: pendingDetails },
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
         break;
 
       case 'apply_wfh':
@@ -640,32 +1081,25 @@ Example: "Annual leave on December 25 for Christmas" or "Sick leave tomorrow for
         const wfhDetails = extractWfhDetails(message);
         
         if (wfhDetails.date && wfhDetails.reason) {
-          // We have enough info, process the WFH request
-          try {
-            const wfhResult = await processWfhRequest(wfhDetails);
-            
-            // Save context for editing
-            contextManager.saveLastRequest(sessionId, {
-              type: 'wfh',
-              date: wfhDetails.date!,
-              reason: wfhDetails.reason!,
-              recordId: wfhResult.id
-            });
-            
-            response = `✅ Work From Home request submitted successfully!
+          // We have enough info - show confirmation instead of creating immediately
+          wfhDetails.reason = wfhDetails.reason || 'Personal';
+          contextManager.setPendingConfirmation(sessionId, 'wfh', wfhDetails);
+          
+          response = `📋 **Please confirm your WFH request:**
 
-📋 Summary:
-• Date: ${wfhDetails.date}
-• Reason: ${wfhDetails.reason}
-• Employee: ${wfhDetails.employeeName || 'You'}
-• Status: Approved (Auto-approved)
+• **Date**: ${wfhDetails.date}
+• **Reason**: ${wfhDetails.reason}
 
-Your WFH request has been recorded. Please ensure you have proper internet connectivity and VPN access.
-
-✏️ Need to make changes? Just say "edit" or "change date" to update any details.`;
-          } catch (error) {
-            response = `❌ Failed to submit WFH request. Please try again or contact support.`;
-          }
+Tap a button below when you're ready.`;
+          
+          res.json({ 
+            reply: response,
+            intent: 'confirm_wfh',
+            showButtons: true,
+            pendingRequest: { type: 'wfh', details: wfhDetails },
+            timestamp: new Date().toISOString()
+          });
+          return;
         } else if (wfhDetails.date) {
           // We have the date but need reason
           response = `🏠 I understand you want to work from home on ${wfhDetails.date}. Could you please tell me the reason? For example: "for doctor's appointment" or "personal work"`;
@@ -756,6 +1190,54 @@ Example: "WFH tomorrow for doctor's appointment" or "work from home on December 
         break;
 
       default:
+        // Before falling back to AI, try to recognize implicit leave/WFH details
+        const fallbackLeaveDetails = applyLeaveDefaults(extractLeaveDetails(message));
+        if (fallbackLeaveDetails.startDate && lowerMessage.includes('leave')) {
+          if (await enforceLeaveBalance(sessionId, fallbackLeaveDetails, res)) {
+            return;
+          }
+          contextManager.setPendingConfirmation(sessionId, 'leave', fallbackLeaveDetails);
+
+          response = `📋 **Please confirm your leave request:**
+
+• **Type**: ${fallbackLeaveDetails.leaveType}
+• **Date**: ${fallbackLeaveDetails.startDate}${fallbackLeaveDetails.endDate && fallbackLeaveDetails.endDate !== fallbackLeaveDetails.startDate ? ' to ' + fallbackLeaveDetails.endDate : ''}
+• **Reason**: ${fallbackLeaveDetails.reason || 'Personal'}
+
+Tap a button below when you're ready.`;
+
+          res.json({
+            reply: response,
+            intent: 'confirm_leave',
+            showButtons: true,
+            pendingRequest: { type: 'leave', details: fallbackLeaveDetails },
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
+
+        const fallbackWfhDetails = extractWfhDetails(message);
+        if (fallbackWfhDetails.date && lowerMessage.includes('wfh')) {
+          fallbackWfhDetails.reason = fallbackWfhDetails.reason || 'Personal';
+          contextManager.setPendingConfirmation(sessionId, 'wfh', fallbackWfhDetails);
+
+          response = `📋 **Please confirm your WFH request:**
+
+• **Date**: ${fallbackWfhDetails.date}
+• **Reason**: ${fallbackWfhDetails.reason}
+
+Tap a button below when you're ready.`;
+
+          res.json({
+            reply: response,
+            intent: 'confirm_wfh',
+            showButtons: true,
+            pendingRequest: { type: 'wfh', details: fallbackWfhDetails },
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
+
         // Use AI for general queries with conversation context
         const conversationHistory = contextManager.getHistory(sessionId, 3);
         response = await aiService.processMessage(message, { history: conversationHistory });

@@ -1,0 +1,805 @@
+HR Agent Bot – Critical Test Cases & Expected Bot Responses
+Project:
+ Winfomi HR Agent Bot
+Document Version:
+ 2.0
+Date:
+ December 2025
+Focus:
+ User Input → Expected Bot Response Mapping
+A. Leave Management – Critical Tests
+Test 1: Apply Single-Day Leave (Happy Path)
+Test ID:
+ LV-CR-01
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"I want to apply for casual leave tomorrow."
+Bot Detection
+Recognizes leave intent, parses leave type (casual) and date (tomorrow)
+Expected Bot Response
+📋 Please confirm your leave request:
+Summary:
+• Employee: You
+• Leave Type: CASUAL
+• Date: [Tomorrow's Date]
+• Reason: Not provided
+Choose:
+[✅ Confirm] [✏️ Edit] [❌ Cancel]
+After User Confirms
+✅ Leave request created successfully!
+• Request ID: LEAVE_XXXXX
+• Type: CASUAL
+• Date: [Tomorrow]
+• Status: Pending Approval
+📧 Manager approval request has been sent to your manager.
+Salesforce Action
+Create Leave_Request__c record with Status = "Pending", Working_Days = 1
+Email Sent
+✉️ Approval email sent to manager with request details
+Pass Criteria
+✅ Record created
+✅ Status = Pending
+✅ Manager email received
+Test 2: Apply Multi-Day Leave with Correct Date Range
+Test ID:
+ LV-CR-02
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"Apply sick leave from 15th to 17th of this month."
+Bot Detection
+Parses leave type (sick), start date (15th), end date (17th), calculates working days
+Expected Bot Response
+📋 Please confirm your leave request:
+Summary:
+• Employee: You
+• Leave Type: SICK
+• Dates: 15-Dec-2025 to 17-Dec-2025
+• Working Days: 3
+• Reason: Not provided
+Choose:
+[✅ Confirm] [✏️ Edit] [❌ Cancel]
+After User Confirms
+✅ Leave request created successfully!
+• Request ID: LEAVE_XXXXX
+• Type: SICK
+• Duration: 15-Dec to 17-Dec-2025
+• Working Days: 3
+• Status: Pending Approval
+📧 Your manager will review this request.
+Salesforce Action
+Create record: Start_Date = 15-Dec, End_Date = 17-Dec, Working_Days = 3 (excludes weekends if applicable)
+Pass Criteria
+✅ Multi-day record created
+✅ Working days calculated correctly
+✅ Weekends excluded from count
+Test 3: Apply Leave with Invalid Date Order (End Before Start)
+Test ID:
+ LV-CR-03
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"Apply leave from 10th to 5th next month."
+Bot Detection
+Detects that end date (5th) is earlier than start date (10th)
+Expected Bot Response
+❌ Invalid date range.
+The end date (5th) cannot be earlier than the start date (10th).
+Please provide a valid date range. Example: "Apply leave from 10th to 15th next month."
+Salesforce Action
+NO record created
+User Next Action
+User must re-enter with correct dates
+Pass Criteria
+✅ Invalid dates rejected
+✅ Clear error message
+✅ No record in Salesforce
+Test 4: Apply Leave with Insufficient Balance
+Test ID:
+ LV-CR-04
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"Apply 20 days of casual leave starting next Monday."
+Bot Check
+Retrieves employee's leave balance → Casual Leave balance = 5 days remaining
+Expected Bot Response
+⚠️ 
+Insufficient leave balance.
+You requested: 20 working days
+Your available balance: 5 days
+❌ Cannot create this leave request. You need 15 more days to cover this request.
+Options:
+1. Apply for fewer days (max 5 days)
+2. Choose a different leave type if available
+3. Check your leave policy by saying "What is my leave balance?"
+Salesforce Action
+NO record created; balance check prevents submission
+Pass Criteria
+✅ Balance verified before creation
+✅ Exact balance shown
+✅ Request rejected
+✅ User guided to alternatives
+Test 5: Apply Leave with Overlapping Existing Leave
+Test ID:
+ LV-CR-05
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"I want leave on 20th, and I already have leave that week."
+Bot Clarification
+"Which month is the 20th?"
+User Response
+"December"
+Bot Action
+Queries Leave_Request__c for records between 15-Dec to 22-Dec with Status = "Approved" or "Pending"
+Existing Conflict
+Found: Leave request LEAVE_1234 (18-Dec to 22-Dec, Approved, Sick Leave)
+Expected Bot Response
+❌ 
+Overlapping leave detected.
+You already have an approved leave request:
+• Type: SICK
+• Dates: 18-Dec-2025 to 22-Dec-2025
+• Status: Approved
+The date 
+20-Dec-2025
+ falls within your existing leave. You cannot apply for leave on the same day.
+Options:
+1. Cancel your existing leave and apply new dates
+2. Choose different dates that don't overlap
+3. Check your existing leave by asking "Show my leave requests"
+Salesforce Action
+NO record created
+Pass Criteria
+✅ Overlap detected
+✅ Existing request shown
+✅ Duplicate blocked
+Test 6: Apply Leave for Past Date
+Test ID:
+ LV-CR-06
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"Apply casual leave for yesterday."
+Bot Check
+Compares leave date against today's date
+Expected Bot Response
+⚠️ 
+Cannot apply leave for past dates.
+Today is: 
+16-Dec-2025
+Your requested date: 
+15-Dec-2025
+ (yesterday)
+❌ Leave cannot be applied retroactively. Only current and future dates are allowed.
+Would you like to apply for today or a future date instead?
+Salesforce Action
+NO record created
+Policy Option
+If retroactive leave is allowed per policy, bot should clarify with manager approval needed
+Pass Criteria
+✅ Past dates blocked or flagged
+✅ User informed
+✅ Proper guidance given
+Test 7: Apply Half-Day Leave
+Test ID:
+ LV-CR-07
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"I need half-day leave tomorrow afternoon."
+Bot Detection
+Parses half-day intent, time slot (afternoon)
+Expected Bot Response
+📋 
+Confirm half-day leave request:
+Summary:
+• Employee: You
+• Leave Type: CASUAL
+• Date: [Tomorrow]
+• Time Slot: 
+Afternoon
+ (1:00 PM – 5:00 PM)
+• Duration: 
+0.5 days
+• Your balance after: 4.5 days
+Choose:
+[✅ Confirm] [✏️ Edit] [❌ Cancel]
+After User Confirms
+✅ Half-day leave request created!
+• Request ID: LEAVE_XXXXX
+• Duration: 0.5 days
+• Status: Pending Approval
+Balance updated:
+ 5 days → 4.5 days
+Salesforce Action
+Create record: Is_Half_Day = true, Time_Slot = "Afternoon", Working_Days = 0.5
+Balance Deduction
+Employee's leave balance reduced by 0.5 days
+Pass Criteria
+✅ Half-day support
+✅ Time slot captured
+✅ 0.5 days deducted
+✅ Balance updated
+Test 8: Cancel Pending Leave Request
+Test ID:
+ LV-CR-08
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Cancel my leave from 15th to 17th."
+Bot Action
+Searches for Leave_Request__c records with dates 15-17 Dec, Status = "Pending" or "Approved"
+Found Match
+LEAVE_1234 (15-17 Dec, Pending, Sick Leave)
+Bot Response
+Found matching request:
+• Request ID: LEAVE_1234
+• Type: SICK
+• Dates: 15-Dec to 17-Dec
+• Status: Pending
+• Working Days: 3
+Are you sure you want to cancel this request?
+[✅ Yes, Cancel] [❌ No, Keep It]
+User Confirms
+"Yes"
+Expected Bot Response
+✅ 
+Leave request cancelled successfully!
+• Request ID: LEAVE_1234
+• Status: Cancelled
+• Balance Restored: 3 days
+• Your new balance: 8 days
+📧 Your manager has been notified of the cancellation.
+Salesforce Action
+Update Status = "Cancelled", restore leave balance
+Manager Email
+Notification sent: "Employee has cancelled leave request LEAVE_1234"
+Pass Criteria
+✅ Request found
+✅ Confirmation asked
+✅ Status updated
+✅ Balance restored
+✅ Manager notified
+Test 9: Edit Leave Request Before Approval
+Test ID:
+ LV-CR-09
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Apply annual leave on 20th for marriage."
+Bot Response
+(Shows confirmation with details)
+User Action
+Clicks [✏️ Edit]
+Bot Asks
+"What would you like to edit: the type, date, reason, or duration?"
+User Input
+"Change reason to wedding anniversary"
+Bot Response
+📋 
+Updated leave request:
+Summary:
+• Type: ANNUAL
+• Date: 20-Dec-2025
+• Reason: 
+wedding anniversary
+• Duration: 1 day
+[✅ Confirm] [✏️ Edit Again] [❌ Cancel]
+User Confirms
+"Confirm"
+Expected Bot Response
+✅ 
+Leave request created!
+• Request ID: LEAVE_XXXXX
+• Type: ANNUAL
+• Date: 20-Dec-2025
+• Reason: wedding anniversary
+• Status: Pending Approval
+📧 Approval request sent to your manager.
+Salesforce Action
+Create Leave_Request__c with Reason = "wedding anniversary"
+Pass Criteria
+✅ Edit captured
+✅ Updated details shown
+✅ Record created with correct data
+Test 10: Manager Cannot Approve Own Leave
+Test ID:
+ LV-CR-10
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Approve my leave request for next week."
+Bot Intent
+Detects user is trying to approve their own leave
+Expected Bot Response
+❌ 
+Cannot approve your own leave.
+For compliance and policy reasons, employees cannot approve their own leave requests.
+Your leave request has been sent to your manager: 
+[Manager Name]
+Your manager will review and approve/reject it.
+Your manager's email:
+ [manager@company.com]
+You can check the status by asking "What is my leave status?"
+Action Blocked
+Approval workflow prevents self-approval
+Pass Criteria
+✅ Self-approval blocked
+✅ Actual approver identified
+✅ User guided properly
+Test 11: Check Leave Balance Query
+Test ID:
+ LV-CR-11
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"How many casual leave days do I have left?"
+Bot Action
+Queries employee's Leave_Balance__c record
+System Data
+Casual_Leave_Balance = 5 days, Sick_Leave_Balance = 8 days, Annual_Leave_Balance = 15 days
+Expected Bot Response
+📊 
+Your leave balance:
+• 
+Casual Leave:
+ 5 days remaining
+• 
+Sick Leave:
+ 8 days remaining
+• 
+Annual Leave:
+ 15 days remaining
+Total:
+ 28 days
+Note:
+ Balances are updated in real-time and reflect approved/pending leave deductions.
+Would you like to apply for leave? Say "Apply leave" to get started.
+Real-Time Accuracy
+Balance reflects live data from Salesforce
+Pass Criteria
+✅ Exact balance returned
+✅ All leave types shown
+✅ Consistent with system records
+Test 12: Query Leave Policy
+Test ID:
+ LV-CR-12
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"What is the rule for carrying forward unused leave?"
+Bot Knowledge Source
+Retrieves from Leave_Policy__c document or knowledge base
+Policy Data
+Carry-Forward Limit = 5 days, Expiry Date = March 31
+Expected Bot Response
+📋 
+Leave Carry-Forward Policy:
+Entitlement:
+ 21 days per financial year
+Carry-Forward Rules:
+• Maximum days that can be carried forward: 
+5 days
+• Unused leaves expire on: 
+March 31
+ each year
+• Days exceeding 5 are forfeited (non-refundable)
+Example:
+If you have 8 days remaining on March 31, you can carry forward 5 days. The remaining 3 days will be lost.
+Encashment:
+You can encash unused leaves above 15 days at the end of the financial year.
+Need more help? Ask "Apply leave" to submit a request.
+Knowledge Source Accuracy
+Policy information pulled from official Leave_Policy__c record
+Pass Criteria
+✅ Accurate policy info
+✅ Examples provided
+✅ Aligned with system rules
+B. Work-From-Home (WFH) – Critical Tests
+Test 13: Apply Single-Day WFH
+Test ID:
+ WFH-CR-01
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"I want to work from home tomorrow."
+Bot Detection
+Recognizes WFH intent, parses date (tomorrow)
+Expected Bot Response
+📋 
+Confirm your WFH request:
+Summary:
+• Employee: You
+• Type: Work From Home
+• Date: [Tomorrow's Date]
+• Status: Pending Approval
+Choose:
+[✅ Confirm] [✏️ Edit] [❌ Cancel]
+After User Confirms
+✅ 
+WFH request created successfully!
+• Request ID: WFH_XXXXX
+• Date: [Tomorrow]
+• Status: Pending Approval
+📧 Your manager will review this request.
+Salesforce Action
+Create Leave_Request__c record with Type = "WFH", Status = "Pending"
+Pass Criteria
+✅ Record created
+✅ Status = Pending
+✅ Manager approval required
+Test 14: Apply Multi-Day WFH Exceeding Monthly Limit
+Test ID:
+ WFH-CR-02
+Priority:
+ CRITICAL
+Aspect
+Details
+User Input
+"Book WFH for all days next week."
+Bot Action
+Checks WFH policy: Max 3 days/week, Max 12 days/month
+Employee Status
+This month: 1 WFH day used, Remaining: 11 days
+Request Analysis
+Next week = 5 working days (Mon-Fri), but policy allows max 3/week
+Expected Bot Response
+⚠️ 
+WFH request exceeds policy limits.
+You requested: 5 days (Mon-Fri next week)
+Policy allows: Maximum 3 days per week
+Your monthly limit:
+• Used this month: 1 day
+• Remaining: 11 days
+• Weekly limit: 3 days
+Auto-adjusted to 3 days (Mon-Tue-Wed):
+📋 Confirm adjusted WFH request:
+• Dates: Monday, Tuesday, Wednesday
+• Duration: 3 days
+[✅ Approve 3 Days] [✏️ Choose Different Dates] [❌ Cancel]
+User Confirms
+"Approve 3 Days"
+Expected Final Response
+✅ 
+WFH request created for 3 days!
+• Request ID: WFH_XXXXX
+• Dates: Mon-Tue-Wed (Next Week)
+• Status: Pending Approval
+Remaining WFH days this month:
+ 8
+Salesforce Action
+Create 3 separate WFH records for consecutive days
+Pass Criteria
+✅ Policy limits enforced
+✅ Partial approval offered
+✅ User choice clear
+✅ Records created correctly
+Test 15: Block WFH on Company Holiday
+Test ID:
+ WFH-CR-03
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Give me WFH on 25th December (Company Holiday)."
+Bot Check
+Queries Holiday_Calendar__c: 25-Dec-2025 = "Christmas" (Company Holiday)
+Expected Bot Response
+❌ 
+Cannot apply WFH on company holiday.
+25-Dec-2025 is marked as a 
+Company Holiday
+ (Christmas).
+On company holidays, no work is expected. You cannot apply WFH on this day.
+Available dates for WFH:
+• 23-Dec (Tue), 24-Dec (Wed), 26-Dec (Fri)
+Would you like to choose different dates?
+Salesforce Action
+NO record created
+Holiday Check
+Performed against Holiday_Calendar__c before approval
+Pass Criteria
+✅ Holiday blocked
+✅ Reason explained
+✅ Alternatives suggested
+Test 16: WFH on Day with Approved Leave
+Test ID:
+ WFH-CR-04
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Apply WFH on 10th, I already have approved leave that day."
+Bot Check
+Queries Leave_Request__c for 10th with Status = "Approved" → Found: LEAVE_5555 (Approved, Sick Leave)
+Expected Bot Response
+❌ 
+Conflict detected: Cannot apply WFH on leave day.
+You already have an approved leave request on 10-Dec-2025:
+• Type: SICK LEAVE
+• Status: Approved
+You cannot apply WFH on a day you have leave. Please choose a different date.
+Options:
+1. Cancel your existing leave for 10-Dec
+2. Choose a different date for WFH
+3. Check your requests by asking "Show my leave requests"
+Salesforce Action
+NO record created
+Conflict Prevention
+System prevents WFH + Leave on same day
+Pass Criteria
+✅ Conflict detected
+✅ User prevented from double-booking
+✅ Solutions offered
+Test 17: Check WFH Usage This Month
+Test ID:
+ WFH-CR-05
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"How many WFH days have I used this month?"
+Bot Action
+Queries all WFH records for current month with Status = "Approved"
+System Data
+2 WFH days approved (3-Dec, 5-Dec)
+Expected Bot Response
+📊 
+Your WFH usage this month (December 2025):
+• 
+Days used:
+ 2 days
+• 
+Days remaining:
+ 10 days (monthly limit = 12)
+• 
+Weekly used:
+ 0 days (reset next week)
+• 
+Weekly limit:
+ 3 days/week
+Your WFH requests:
+1. 3-Dec-2025 – Approved
+2. 5-Dec-2025 – Approved
+Would you like to apply for more WFH? Say "Apply WFH" to get started.
+Real-Time Data
+Shows live approved WFH records
+Pass Criteria
+✅ Exact count returned
+✅ Remaining balance shown
+✅ Policy limits displayed
+C. Reimbursement & Policy – High-Value Tests
+Test 18: Apply for Reimbursement
+Test ID:
+ REIMB-CR-01
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Claim reimbursement of 1500 rupees for cab travel yesterday."
+Bot Action
+Detects reimbursement intent, amount (1500), category (travel), date (yesterday)
+Expected Bot Response
+📋 
+Reimbursement claim form:
+I found the following in your request:
+• Amount: ₹1500
+• Category: Travel
+• Date: 15-Dec-2025
+To proceed, please provide:
+1. 
+Bill/Receipt Reference
+ – Upload file or provide reference number (e.g., "INV-ABC123")
+2. 
+Brief Description
+ – (Optional) e.g., "Cab to airport for business meeting"
+Example: "Receipt number TRAVEL-001, cab to client meeting"
+User Provides
+"Receipt: CAB-15DEC-001, cab to office meeting"
+Bot Response
+📋 
+Confirm your reimbursement claim:
+Summary:
+• Amount: ₹1500
+• Category: 
+Travel
+• Date: 15-Dec-2025
+• Receipt: CAB-15DEC-001
+• Description: cab to office meeting
+• Status: Pending Review
+[✅ Submit] [✏️ Edit] [❌ Cancel]
+User Confirms
+"Submit"
+Expected Final Response
+✅ 
+Reimbursement claim submitted!
+• Claim ID: REIMB_XXXXX
+• Amount: ₹1500
+• Status: 
+Pending Review
+📧 HR will review your claim within 5 business days.
+You can check status anytime by asking "Check my reimbursement status."
+Salesforce Action
+Create Reimbursement__c record with Status = "Submitted"
+Validation
+Amount checked against company limit (if applicable)
+Pass Criteria
+✅ Amount captured
+✅ Category assigned
+✅ Receipt reference stored
+✅ Record created
+✅ Status = Pending Review
+Test 19: Query Company Holidays
+Test ID:
+ HOLIDAY-CR-01
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"What are the official holidays this month?"
+Bot Action
+Queries Holiday_Calendar__c for December 2025
+Holiday Data
+25-Dec: Christmas, 26-Dec: Boxing Day
+Today's Date
+16-Dec-2025
+Expected Bot Response
+🎉 
+Company Holidays – December 2025:
+1. 
+25-Dec-2025 – Christmas
+ (Wednesday)
+  Status: Company Holiday
+2. 
+26-Dec-2025 – Boxing Day
+ (Thursday)
+  Status: Company Holiday
+Total:
+ 2 holidays this month
+Upcoming Holidays:
+• 25-Dec (9 days from now)
+• 26-Dec (10 days from now)
+📌 Note:
+ Holiday dates may vary by location. Confirm with your office for location-specific holidays.
+Need to apply for leave around these dates? Say "Apply leave" to get started.
+Knowledge Source
+Holiday_Calendar__c object
+Pass Criteria
+✅ Correct holidays listed
+✅ Dates highlighted
+✅ Location note included
+✅ Upcoming holidays shown
+Test 20: Explain WFH Policy in Simple Words
+Test ID:
+ POLICY-CR-01
+Priority:
+ HIGH
+Aspect
+Details
+User Input
+"Explain the WFH policy in simple words."
+Bot Action
+Retrieves WFH_Policy__c from knowledge base
+Expected Bot Response
+📋 
+Work From Home (WFH) Policy – Simplified:
+Who can apply?
+✅ All full-time employees
+How many WFH days are allowed?
+• 
+Per week:
+ Maximum 3 days
+• 
+Per month:
+ Maximum 12 days
+• 
+Consecutive:
+ Maximum 2 days in a row
+When can I apply?
+✅ Any working day (Monday to Friday)
+❌ NOT on company holidays
+❌ NOT on days you already have approved leave
+❌ NOT on mandatory office days (if any)
+How does approval work?
+• 
+1-day requests:
+ Auto-approved instantly ⚡
+• 
+2+ day requests:
+ Manager must approve 👤
+Simple process:
+1. Say "Apply WFH" and provide dates
+2. I'll check if it's allowed
+3. Manager gets approval request (if needed)
+4. You get confirmation once approved ✅
+Questions?
+• "How many WFH days do I have left?"
+• "Apply WFH for tomorrow"
+• "Check my WFH status"
+Knowledge Source
+WFH_Policy__c record
+Tone
+Simple, bullet-point format, conversational
+Pass Criteria
+✅ Clear explanation
+✅ Accurate limits
+✅ Easy to understand
+✅ Actionable guidance
+Summary & Testing Checklist
+Category
+Tests
+Status
+Leave – Critical
+LV-CR-01 to LV-CR-12
+☐
+WFH – Critical
+WFH-CR-01 to WFH-CR-05
+☐
+Reimbursement & Policy
+REIMB-CR-01, HOLIDAY-CR-01, POLICY-CR-01
+☐
+Total Tests
+20
+☐
+Test Execution Notes
+Before Testing:
+[ ] Ensure Salesforce sandbox is configured
+[ ] Verify Holiday_Calendar__c is populated
+[ ] Check Leave_Policy__c and WFH_Policy__c documents are accessible
+[ ] Employee leave balances are initialized
+[ ] Manager email addresses are configured
+During Testing:
+[ ] Capture bot responses verbatim
+[ ] Note any variations from expected response
+[ ] Log timestamp and duration for each test
+[ ] Document any bot errors or crashes
+[ ] Verify Salesforce records created/updated correctly
+[ ] Confirm emails sent to managers
+After Testing:
+[ ] Compare actual vs. expected responses
+[ ] Mark Pass/Fail for each test
+[ ] Log any bugs found
+[ ] Document recommendations for improvement
+Sign-Off
+Role
+Name
+Signature
+Date
+Developer
+QA Tester
+HR Manager
+End of Document

@@ -41,8 +41,8 @@ body{
   box-shadow:0 4px 20px rgba(7,32,58,0.15);
   border-bottom:1px solid rgba(255,255,255,0.1);
 }
-.header h1{margin:0;font-size:28px;letter-spacing:-0.5px;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,0.1)}
-.header p{margin:6px 0 0 0;opacity:0.92;font-size:14px;font-weight:500}
+.header h1{margin:0;font-size:32px;letter-spacing:-0.5px;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,0.1)}
+.header p{margin:6px 0 0 0;opacity:0.92;font-size:16px;font-weight:500}
 .demo-badge{display:inline-block;margin-left:8px;background:var(--accent-warm);color:white;padding:6px 12px;border-radius:999px;font-size:12px}
 
 .main-grid{display:grid;grid-template-columns:1fr 360px;gap:0}
@@ -51,35 +51,49 @@ body{
 /* Chat column */
 .chat-column{display:flex;flex-direction:column;min-height:520px}
 .chat-container{flex:1;padding:28px;background:linear-gradient(180deg,#ffffff 0%, var(--bg-1) 100%);overflow:auto}
-.message{margin-bottom:16px;padding:16px 20px;border-radius:12px;max-width:78%;box-shadow:0 8px 22px rgba(7,16,51,0.05);font-size:15px;line-height:1.5;animation:slideIn 0.3s ease-out}
+.message{margin-bottom:16px;padding:18px 22px;border-radius:12px;max-width:78%;box-shadow:0 8px 22px rgba(7,16,51,0.05);font-size:17px;line-height:1.6;animation:slideIn 0.3s ease-out}
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .bot-message{background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%);border:1px solid rgba(7,16,51,0.08);color:var(--brand);transition:box-shadow 0.2s ease}
 .bot-message:hover{box-shadow:0 12px 28px rgba(7,16,51,0.08)}
 .user-message{background:linear-gradient(180deg,#60a5fa 0%, var(--accent) 100%);color:white;margin-left:auto;text-align:right;box-shadow:0 8px 22px rgba(37,99,235,0.15)}
-.message strong{display:block;margin-bottom:6px;color:var(--brand);font-weight:700}
+.message strong{display:block;margin-bottom:6px;color:var(--brand);font-weight:700;font-size:18px}
 
 /* Confirmation prompt styling */
 .confirmation-prompt{background:linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%);border:1px solid rgba(16,185,129,0.2);padding:16px !important}
-.confirm-btn{padding:10px 16px;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;transition:all 0.2s ease;background:#10b981;color:white;box-shadow:0 4px 12px rgba(16,185,129,0.15)}
+.confirm-btn{padding:12px 20px;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:16px;transition:all 0.2s ease;background:#10b981;color:white;box-shadow:0 4px 12px rgba(16,185,129,0.15)}
 .confirm-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,185,129,0.2)}
 .confirm-btn:active{transform:translateY(0)}
 .reject-btn{background:#ef4444;box-shadow:0 4px 12px rgba(239,68,68,0.15)}
 .reject-btn:hover{box-shadow:0 6px 16px rgba(239,68,68,0.2)}
 .edit-btn{background:#f59e0b;box-shadow:0 4px 12px rgba(245,158,11,0.15)}
 .edit-btn:hover{box-shadow:0 6px 16px rgba(245,158,11,0.2)}
+.edit-form-container{background:linear-gradient(180deg,#eef2ff 0%, #f8fafc 100%);border:1px solid rgba(59,130,246,0.18);padding:18px 20px;margin-top:4px}
+.edit-form{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.edit-form h4{margin:0;font-size:18px;font-weight:700;color:var(--brand)}
+.edit-form label{font-weight:600;font-size:15px;color:var(--brand)}
+.edit-form input,
+.edit-form select,
+.edit-form textarea{padding:12px 14px;border:2px solid #e6edf3;border-radius:10px;font-size:16px;transition:border 0.2s ease, box-shadow 0.2s ease;background:#ffffff}
+.edit-form input:focus,
+.edit-form select:focus,
+.edit-form textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
+.edit-form textarea{min-height:96px;resize:vertical}
+.edit-form-actions{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+.confirm-btn.secondary-btn{background:#e2e8f0;color:#1f2937;box-shadow:0 4px 12px rgba(148,163,184,0.15)}
+.confirm-btn.secondary-btn:hover{box-shadow:0 6px 16px rgba(148,163,184,0.2)}
 
 .input-container{display:flex;gap:14px;padding:22px;border-top:1px solid #eef2f7;align-items:center;background:#fafbfc;position:relative}
-.message-input{flex:1;padding:14px 18px;border:2px solid #e6edf3;border-radius:12px;font-size:15px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.02);transition:all 0.2s ease;position:relative;z-index:1}
+.message-input{flex:1;padding:16px 20px;border:2px solid #e6edf3;border-radius:12px;font-size:17px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.02);transition:all 0.2s ease;position:relative;z-index:1}
 .message-input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 2px rgba(0,0,0,0.02), 0 0 0 3px rgba(59,130,246,0.1)}
 
 /* Dropdown styling */
 .dropdown-menu{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #e6edf3;border-radius:12px;box-shadow:0 12px 32px rgba(7,16,51,0.15);z-index:1000;max-height:320px;overflow-y:auto;margin-top:-8px;padding:8px 0}
 .dropdown-item{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:all 0.2s ease;border-left:3px solid transparent}
 .dropdown-item:hover{background:#f8fafc;border-left-color:var(--accent)}
-.dropdown-icon{font-size:18px;min-width:24px}
-.dropdown-label{font-weight:600;color:var(--brand);flex:0 0 auto;min-width:90px}
-.dropdown-hint{font-size:13px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.8}
-.send-button{background:linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);color:white;padding:12px 22px;border:none;border-radius:10px;cursor:pointer;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.16);transition:all 0.2s ease;font-size:15px}
+.dropdown-icon{font-size:20px;min-width:24px}
+.dropdown-label{font-weight:600;color:var(--brand);flex:0 0 auto;min-width:90px;font-size:16px}
+.dropdown-hint{font-size:15px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.8}
+.send-button{background:linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);color:white;padding:14px 24px;border:none;border-radius:10px;cursor:pointer;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.16);transition:all 0.2s ease;font-size:17px}
 .send-button:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,99,235,0.2)}
 .send-button:active{transform:translateY(0);box-shadow:0 4px 12px rgba(37,99,235,0.12)}
 .send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
@@ -92,7 +106,7 @@ body{
 
 .quick-actions{padding:18px;border-top:1px solid #eef2fb;background:#fbfdff}
 .quick-buttons{display:flex;flex-wrap:wrap;gap:10px}
-.quick-button{background:#f8fbff;border:2px solid rgba(37,99,235,0.12);color:var(--brand);padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;transition:all 0.2s ease;font-weight:600}
+.quick-button{background:#f8fbff;border:2px solid rgba(37,99,235,0.12);color:var(--brand);padding:12px 16px;border-radius:10px;font-size:15px;cursor:pointer;transition:all 0.2s ease;font-weight:600}
 .quick-button:hover{background:var(--accent);color:white;border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,0.15)}
 .quick-button:active{transform:translateY(0);box-shadow:0 2px 6px rgba(37,99,235,0.1)}
 

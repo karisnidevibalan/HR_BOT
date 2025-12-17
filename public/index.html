@@ -199,6 +199,8 @@
             { label: 'My applications', icon: '✅', text: 'Show my applications' }
         ];
 
+        const LEAVE_TYPES = ['ANNUAL', 'CASUAL', 'SICK', 'MATERNITY', 'PATERNITY'];
+
         // Filter and show dropdown suggestions
         function showDropdown(searchTerm) {
             const term = searchTerm.toLowerCase().trim();
@@ -372,50 +374,60 @@
 
         // Store pending leave date globally
         let pendingLeaveDate = null;
+        let currentPendingRequest = null;
+        let editFormContainer = null;
+
+        function removeConfirmationButtons() {
+            document.querySelectorAll('.confirmation-buttons').forEach(el => el.remove());
+        }
+
+        function removeEditForm() {
+            if (editFormContainer && editFormContainer.parentNode) {
+                editFormContainer.parentNode.removeChild(editFormContainer);
+            }
+            editFormContainer = null;
+        }
+
+        function removeActionButtons() {
+            document.querySelectorAll('.action-buttons').forEach(el => el.remove());
+        }
+
+        function normalizeDateValue(value) {
+            if (!value) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                return value;
+            }
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString().split('T')[0];
+            }
+            return '';
+        }
+
+        function formatLeaveTypeLabel(value) {
+            if (!value) return '';
+            const lower = value.toString().toLowerCase();
+            return lower.charAt(0).toUpperCase() + lower.slice(1);
+        }
+
+        function escapeHtml(value) {
+            if (value === undefined || value === null) return '';
+            return value
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         function showLoading(show) {
             loading.style.display = show ? 'block' : 'none';
         }
 
-        async function sendMessage() {
-            const raw = messageInput.value.trim();
-            if (!raw) return;
-
-            // If user typed only a day (e.g. "12"), expand to full date using current month/year
-            let messageToSend = raw;
-            if (/^\d{1,2}$/.test(raw)) {
-                const expanded = suggestDateFromDay(raw);
-                if (expanded) {
-                    // show original short input to user but send expanded date to server
-                    addMessage(raw, true);
-                    messageInput.value = '';
-                    showLoading(true);
-                    messageToSend = expanded;
-                } else {
-                    addMessage(raw, true);
-                    messageInput.value = '';
-                    showLoading(true);
-                }
-            } else {
-                addMessage(raw, true);
-                messageInput.value = '';
-                showLoading(true);
-            }
-
+        async function sendChatRequest(payload) {
+            showLoading(true);
             try {
-                // Get employee email for leave/WFH requests
-                const email = getEmployeeEmail();
-                console.log('📧 Sending email to backend:', email);
-                
-                const payload = { 
-                    message: messageToSend,
-                    employeeEmail: email
-                };
-                console.log('📦 Full payload:', payload);
-                if (pendingLeaveDate) {
-                    payload.pendingLeaveDate = pendingLeaveDate;
-                }
-                
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
@@ -426,37 +438,40 @@
                 });
 
                 const data = await response.json();
-                
+
                 if (data.reply) {
                     addMessage(data.reply);
-                    
-                    // If backend says to show confirmation buttons (before creation)
+
+                    if (data.pendingRequest) {
+                        currentPendingRequest = data.pendingRequest;
+                    } else if (data.intent && ['leave_created', 'wfh_created', 'confirmation_no', 'error', 'edit_after_creation'].includes(data.intent)) {
+                        currentPendingRequest = null;
+                        removeConfirmationButtons();
+                        removeActionButtons();
+                        removeEditForm();
+                    }
+
                     if (data.showButtons === true) {
+                        removeEditForm();
                         addConfirmationButtons();
                     }
-                    
-                    // If backend says to show action buttons (after creation)
+
                     if (data.showActionButtons === true) {
                         addActionButtons(data.recordId);
                     }
-                    
-                    // Check if server is asking for a reason and store the pending date
+
                     if (data.pendingDate) {
                         pendingLeaveDate = data.pendingDate;
-                    } else {
-                        // Clear pending date after successful request
+                    } else if (!data.showButtons) {
                         pendingLeaveDate = null;
                     }
-                    
-                    // speak bot reply if enabled
+
                     try { if (isTtsEnabled()) speak(data.reply); } catch (e) { console.warn('TTS error', e); }
-                    
-                    // Fallback: If server sends needsConfirmation flag, show confirmation buttons
-                    if (!data.showButtons && (data.needsConfirmation || isConfirmationNeeded(data.reply))) {
+
+                    if (!data.showButtons && data.needsConfirmation) {
                         addConfirmationPrompt();
                     }
-                    
-                    // show quick actions when bot offers help (casual prompt)
+
                     const quick = document.getElementById('quickActions');
                     const showTriggers = ['I can help with leave', 'What would you like to do today', 'I can help with leave, WFH, reimbursements'];
                     const shouldShow = showTriggers.some(t => data.reply.includes(t));
@@ -465,34 +480,54 @@
                     addMessage(`❌ Error: ${data.error}`);
                 }
             } catch (error) {
+                console.error('Chat request error:', error);
                 addMessage('❌ Connection error. Please make sure the server is running.');
+            } finally {
+                showLoading(false);
             }
-            
-            showLoading(false);
         }
 
-        // Check if confirmation is needed based on bot response
-        function isConfirmationNeeded(reply) {
-            // Don't show buttons for error messages
-            if (reply.includes('❌') || reply.includes('⚠️') || 
-                reply.includes('Cannot create') || reply.includes('past date') ||
-                reply.includes('Error') || reply.includes('Failed')) {
-                return false;
+        async function sendMessage() {
+            const raw = messageInput.value.trim();
+            if (!raw) return;
+
+            let messageToSend = raw;
+            if (/^\d{1,2}$/.test(raw)) {
+                const expanded = suggestDateFromDay(raw);
+                if (expanded) {
+                    messageToSend = expanded;
+                }
             }
-            
-            // Only show buttons for successful leave/WFH creation
-            const successKeywords = ['Leave request created', 'WFH request submitted', 'request created'];
-            return successKeywords.some(kw => reply.includes(kw));
+
+            addMessage(raw, true);
+            messageInput.value = '';
+
+            const email = getEmployeeEmail();
+            const payload = {
+                message: messageToSend,
+                employeeEmail: email
+            };
+
+            if (pendingLeaveDate) {
+                payload.pendingLeaveDate = pendingLeaveDate;
+            }
+
+            await sendChatRequest(payload);
         }
 
         // Add confirmation buttons to chat
         function addConfirmationButtons() {
+            removeConfirmationButtons();
+            removeEditForm();
+
+            const editDisabled = currentPendingRequest ? '' : 'disabled';
             const confirmDiv = document.createElement('div');
-            confirmDiv.className = 'message confirmation-buttons';
+            confirmDiv.className = 'message bot-message confirmation-buttons';
             confirmDiv.innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:12px; justify-content:center;">
                     <button class="confirm-btn" onclick="handleConfirmClick('yes')">✅ Confirm</button>
                     <button class="confirm-btn reject-btn" onclick="handleConfirmClick('no')">❌ Cancel</button>
+                    <button class="confirm-btn edit-btn" onclick="handleConfirmClick('edit')" ${editDisabled}>✏️ Edit</button>
                 </div>
             `;
             chatContainer.appendChild(confirmDiv);
@@ -501,6 +536,10 @@
 
         // Add action buttons after successful creation (Edit/Cancel)
         function addActionButtons(recordId) {
+            removeActionButtons();
+            removeConfirmationButtons();
+            removeEditForm();
+
             const actionDiv = document.createElement('div');
             actionDiv.className = 'message action-buttons';
             actionDiv.innerHTML = `
@@ -514,10 +553,145 @@
         }
 
         // Handle edit click
-        function handleEditClick() {
+        async function handleEditClick() {
             document.querySelectorAll('.action-buttons').forEach(el => el.remove());
-            messageInput.value = 'edit';
-            sendMessage();
+            addMessage('Edit', true);
+            const email = getEmployeeEmail();
+            await sendChatRequest({
+                message: 'edit',
+                context: { email },
+                employeeEmail: email
+            });
+        }
+
+        function showEditForm() {
+            removeEditForm();
+
+            if (!currentPendingRequest) {
+                addMessage('❌ There is no pending request to edit right now.', false);
+                return;
+            }
+
+            const { type, details } = currentPendingRequest;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message bot-message edit-form-container';
+
+            let formMarkup = '';
+
+            if (type === 'leave') {
+                const selectedType = details.leaveType || 'ANNUAL';
+                const typeOptions = LEAVE_TYPES.map(option => `<option value="${option}" ${option === selectedType ? 'selected' : ''}>${formatLeaveTypeLabel(option)}</option>`).join('');
+                const startValue = normalizeDateValue(details.startDate);
+                const reasonValue = escapeHtml(details.reason || '');
+
+                formMarkup = `
+                    <form class="edit-form" data-request-type="leave">
+                        <h4>Update leave request</h4>
+                        <label for="editLeaveType">Leave type</label>
+                        <select id="editLeaveType" name="leaveType" required>${typeOptions}</select>
+                        <label for="editLeaveDate">Date</label>
+                        <input id="editLeaveDate" name="startDate" type="date" value="${startValue}" required>
+                        <label for="editLeaveReason">Reason</label>
+                        <textarea id="editLeaveReason" name="reason" rows="3" placeholder="Reason">${reasonValue}</textarea>
+                        <div class="edit-form-actions">
+                            <button type="submit" class="confirm-btn">💾 Save changes</button>
+                            <button type="button" class="confirm-btn secondary-btn cancel-edit-btn">Cancel</button>
+                        </div>
+                    </form>
+                `;
+            } else if (type === 'wfh') {
+                const dateValue = normalizeDateValue(details.date);
+                const reasonValue = escapeHtml(details.reason || '');
+
+                formMarkup = `
+                    <form class="edit-form" data-request-type="wfh">
+                        <h4>Update WFH request</h4>
+                        <label for="editWfhDate">Date</label>
+                        <input id="editWfhDate" name="date" type="date" value="${dateValue}" required>
+                        <label for="editWfhReason">Reason</label>
+                        <textarea id="editWfhReason" name="reason" rows="3" placeholder="Reason">${reasonValue}</textarea>
+                        <div class="edit-form-actions">
+                            <button type="submit" class="confirm-btn">💾 Save changes</button>
+                            <button type="button" class="confirm-btn secondary-btn cancel-edit-btn">Cancel</button>
+                        </div>
+                    </form>
+                `;
+            } else {
+                addMessage('❌ This type of request cannot be edited here.', false);
+                return;
+            }
+
+            wrapper.innerHTML = `<strong>HR Agent:</strong>${formMarkup}`;
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            editFormContainer = wrapper;
+
+            const formEl = wrapper.querySelector('form');
+            if (formEl) {
+                formEl.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    submitEditForm(formEl);
+                });
+            }
+
+            const cancelBtn = wrapper.querySelector('.cancel-edit-btn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => cancelEditForm());
+            }
+        }
+
+        async function submitEditForm(form) {
+            const requestType = form.dataset.requestType;
+            const email = getEmployeeEmail();
+
+            const payload = {
+                message: requestType === 'leave' ? 'edit_leave' : 'edit_wfh',
+                context: { email },
+                employeeEmail: email,
+                editDetails: {},
+                intentOverride: requestType === 'leave' ? 'edit_leave' : 'edit_wfh'
+            };
+
+            if (requestType === 'leave') {
+                const leaveType = form.querySelector('[name="leaveType"]').value;
+                const startDate = form.querySelector('[name="startDate"]').value;
+                const reason = form.querySelector('[name="reason"]').value.trim();
+
+                payload.editDetails = {
+                    leaveType,
+                    startDate: startDate || null,
+                    reason: reason.length ? reason : null
+                };
+                payload.editContext = {
+                    requestId: currentPendingRequest && currentPendingRequest.details && currentPendingRequest.details.recordId ? currentPendingRequest.details.recordId : null,
+                    fields: Object.keys(payload.editDetails)
+                };
+            } else if (requestType === 'wfh') {
+                const date = form.querySelector('[name="date"]').value;
+                const reason = form.querySelector('[name="reason"]').value.trim();
+
+                payload.editDetails = {
+                    date: date || null,
+                    reason: reason.length ? reason : null
+                };
+                payload.editContext = {
+                    requestId: currentPendingRequest && currentPendingRequest.details && currentPendingRequest.details.recordId ? currentPendingRequest.details.recordId : null,
+                    fields: Object.keys(payload.editDetails)
+                };
+            } else {
+                addMessage('❌ Unsupported edit type.', false);
+                return;
+            }
+
+            removeEditForm();
+            await sendChatRequest(payload);
+        }
+
+        function cancelEditForm() {
+            removeEditForm();
+            if (currentPendingRequest) {
+                addConfirmationButtons();
+            }
         }
 
         // Handle cancel request click
@@ -559,49 +733,32 @@
             showLoading(false);
         }
 
-        // Handle confirmation button click - sends yes/no to backend
+        // Handle confirmation button click - sends yes/no or opens edit form
         async function handleConfirmClick(action) {
-            // Remove all confirmation button divs
-            document.querySelectorAll('.confirmation-buttons').forEach(el => el.remove());
-            
-            // Show user's choice
-            addMessage(action === 'yes' ? 'Yes' : 'No', true);
-            
-            // Send to backend
-            showLoading(true);
-            try {
-                const email = getEmployeeEmail();
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'X-Session-Id': getSessionId()
-                    },
-                    body: JSON.stringify({ 
-                        message: action === 'yes' ? 'yes' : 'no',
-                        context: { email }
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const reply = data.reply || 'Request processed.';
-                    addMessage(reply, false);
-                    
-                    // If backend says to show action buttons (Edit/Cancel after creation)
-                    if (data.showActionButtons === true) {
-                        addActionButtons(data.recordId);
-                    }
-                    
-                    if (isTtsEnabled()) speak(reply);
-                } else {
-                    addMessage('❌ Error processing your confirmation. Please try again.', false);
+            removeConfirmationButtons();
+
+            if (action === 'edit') {
+                addMessage('Edit', true);
+                if (!currentPendingRequest) {
+                    addMessage('❌ There is no pending request to edit right now.', false);
+                    return;
                 }
-            } catch (error) {
-                console.error('Confirmation error:', error);
-                addMessage('❌ Connection error. Please try again.', false);
+                showEditForm();
+                return;
             }
-            showLoading(false);
+
+            const userMessage = action === 'yes' ? 'Yes' : 'No';
+            addMessage(userMessage, true);
+
+            const email = getEmployeeEmail();
+            const payload = {
+                message: action === 'yes' ? 'yes' : 'no',
+                context: { email },
+                employeeEmail: email,
+                confirmationAction: action
+            };
+
+            await sendChatRequest(payload);
         }
         
         // Legacy function for backward compatibility

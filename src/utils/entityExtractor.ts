@@ -3,7 +3,7 @@
  * Extracts structured data from natural language messages
  */
 
-import dateParser from './dateParser';
+import dateParser from '../services/dateParser';
 import intentDetector from './intentDetector';
 
 export interface WfhDetails {
@@ -18,6 +18,7 @@ export interface LeaveDetails {
   leaveType: string | null;
   reason: string | null;
   employeeName: string | null;
+  durationDays?: number | null;
 }
 
 export class EntityExtractor {
@@ -33,7 +34,11 @@ export class EntityExtractor {
    * Extract WFH details from message
    */
   extractWfhDetails(message: string): WfhDetails {
-    const date = dateParser.parseDate(message);
+    const sanitizedForDate = message
+      .replace(/work\s+from\s+home/gi, 'wfh')
+      .replace(/from\s+home/gi, 'home');
+
+    const date = dateParser.parseDate(sanitizedForDate);
     
     // Extract reason - if null, use context-based default
     let reason = this.extractReason(message, 'wfh');
@@ -56,6 +61,7 @@ export class EntityExtractor {
     const dateRange = dateParser.parseDateRange(message);
     let startDate: string | null = null;
     let endDate: string | null = null;
+    let durationDays: number | null = null;
 
     if (dateRange) {
       startDate = dateRange.startDate;
@@ -63,6 +69,14 @@ export class EntityExtractor {
     } else {
       startDate = dateParser.parseDate(message);
       endDate = startDate;
+    }
+
+    const durationMatch = message.match(/(\d{1,3})\s*(?:day|days)\b/i);
+    if (durationMatch) {
+      const parsed = parseInt(durationMatch[1], 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        durationDays = parsed;
+      }
     }
 
     // Extract leave type
@@ -74,12 +88,23 @@ export class EntityExtractor {
       reason = this.getDefaultReason(message);
     }
 
+    if (startDate && durationDays && durationDays > 1 && (!endDate || endDate === startDate)) {
+      const end = new Date(startDate);
+      end.setDate(end.getDate() + durationDays - 1);
+      endDate = end.toISOString().split('T')[0];
+    }
+
+    if (!durationDays && startDate && endDate) {
+      durationDays = this.calculateDurationDays(startDate, endDate);
+    }
+
     return {
       startDate,
       endDate,
       leaveType,
       reason,
-      employeeName: null // To be filled by controller
+      employeeName: null, // To be filled by controller
+      durationDays
     };
   }
 
@@ -168,6 +193,8 @@ export class EntityExtractor {
     let cleaned = reason
       // Remove leave/WFH type keywords
       .replace(/\b(apply|apply for|applying for|request|requesting)\b/gi, '')
+      .replace(/\bcreate\b/gi, '')
+      .replace(/\bcreate\s+wfh\b/gi, '')
       .replace(/\b(leave|leaves)\b/gi, '')
       .replace(/\b(annual|sick|casual|maternity|paternity)\b/gi, '')
       .replace(/\b(wfh|work from home|working from home)\b/gi, '')
@@ -184,6 +211,7 @@ export class EntityExtractor {
       // Remove common filler words
       .replace(/\b(i|want|need|to|a|an|the|my|for|at|in|of)\b/gi, '')
       .replace(/\b(please|can|could|would|will|shall)\b/gi, '')
+      .replace(/\bmove\s+(to|towards)\b/gi, 'move ')
       
       // Clean up whitespace
       .replace(/\s+/g, ' ')
@@ -247,7 +275,10 @@ export class EntityExtractor {
    * Check if message is confirming
    */
   isConfirmation(message: string): boolean {
-    const lowerMessage = message.toLowerCase().trim();
+    const lowerMessage = message
+      .toLowerCase()
+      .trim()
+      .replace(/[.!?,]/g, '');
     const confirmKeywords = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'correct', 'right', 'confirm', 'proceed'];
     return confirmKeywords.some(keyword => lowerMessage === keyword || lowerMessage.startsWith(keyword + ' '));
   }
@@ -256,7 +287,10 @@ export class EntityExtractor {
    * Extract confirmation response (yes/no/unclear)
    */
   extractConfirmation(message: string): 'yes' | 'no' | null {
-    const lowerMessage = message.toLowerCase().trim();
+    const lowerMessage = message
+      .toLowerCase()
+      .trim()
+      .replace(/[.!?,]/g, '');
     
     // Check for yes
     const confirmKeywords = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'correct', 'right', 'confirm', 'proceed', 'approve'];
@@ -280,6 +314,18 @@ export class EntityExtractor {
     const lowerMessage = message.toLowerCase().trim();
     const rejectKeywords = ['no', 'nope', 'nah', 'cancel', 'nevermind', 'never mind', 'stop'];
     return rejectKeywords.some(keyword => lowerMessage === keyword || lowerMessage.startsWith(keyword + ' '));
+  }
+
+  private calculateDurationDays(startDate: string, endDate: string): number {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return 1;
+    }
+
+    const diffInMs = end.getTime() - start.getTime();
+    const diffInDays = Math.floor(diffInMs / (24 * 60 * 60 * 1000));
+    return diffInDays >= 0 ? diffInDays + 1 : 1;
   }
 }
 
