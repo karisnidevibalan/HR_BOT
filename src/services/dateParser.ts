@@ -81,6 +81,7 @@ export class DateParserService {
 
   parseDuration(message: string): DurationParseResult {
     const normalized = (message || '').toLowerCase();
+    console.log('[DEBUG] parseDuration input:', normalized);
     let duration: number | null = null;
     let hasExplicitDuration = false;
 
@@ -94,9 +95,12 @@ export class DateParserService {
       }
     }
 
+
+    // Match 'half day', 'half-day', 'a half day', 'an half day', etc.
+    // Match 'half day', 'half-day', 'a half day', 'an half day', 'half a day', etc.
+    const halfDayRegex = /(?:^|\s)(a|an)?\s*half([- ]?a)?[- ]?day(s)?(?:\s|$)/;
     const isHalfDay =
-      normalized.includes('half-day') ||
-      normalized.includes('half day') ||
+      halfDayRegex.test(normalized) ||
       (!duration && (normalized.includes('morning') || normalized.includes('afternoon')));
 
     if (isHalfDay) {
@@ -104,11 +108,15 @@ export class DateParserService {
       hasExplicitDuration = true;
     }
 
-    return {
+    const debugResult = {
       durationDays: duration,
       isHalfDay,
       hasExplicitDuration
     };
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG] parseDuration result:', debugResult);
+    }
+    return debugResult;
   }
 
   parseDate(text: string, referenceDate: Date = new Date()): string | null {
@@ -416,6 +424,9 @@ export class DateParserService {
       const day = parseInt(dayFirstMatch[1], 10);
       const monthName = dayFirstMatch[2].toLowerCase();
       const year = dayFirstMatch[3] ? parseInt(dayFirstMatch[3], 10) : referenceDate.getFullYear();
+      if (!(monthName in this.monthNames)) {
+        return { date: null, error: `Unknown month in "${raw}".` };
+      }
       const month = this.monthNames[monthName];
       const candidate = new Date(year, month, day);
       return this.validateDate(candidate, day, month, raw, raw);

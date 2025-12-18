@@ -7,7 +7,11 @@ export interface SessionContext {
   sessionId: string;
   userEmail?: string;
   userName?: string;
+  employeeId?: string;
+  employeeName?: string;
   awaitingEmail?: boolean;
+  emailAttempts?: number;
+  emailVerificationLocked?: boolean;
   awaitingLeaveDetails?: {
     partialDate?: string;
     clarifiedDate?: string;
@@ -118,9 +122,12 @@ export class ContextManager {
    * Set user email
    */
   setUserEmail(sessionId: string, email: string): void {
+    const normalized = email.trim();
     this.updateContext(sessionId, { 
-      userEmail: email,
-      awaitingEmail: false 
+      userEmail: normalized,
+      awaitingEmail: false,
+      emailAttempts: 0,
+      emailVerificationLocked: false 
     });
   }
 
@@ -136,7 +143,71 @@ export class ContextManager {
    * Mark as awaiting email
    */
   setAwaitingEmail(sessionId: string): void {
-    this.updateContext(sessionId, { awaitingEmail: true });
+    this.updateContext(sessionId, { awaitingEmail: true, emailAttempts: 0, emailVerificationLocked: false });
+  }
+
+  getEmailAttempts(sessionId: string): number {
+    const context = this.getContext(sessionId);
+    return context.emailAttempts ?? 0;
+  }
+
+  incrementEmailAttempts(sessionId: string): number {
+    const context = this.getContext(sessionId);
+    const next = (context.emailAttempts ?? 0) + 1;
+    context.emailAttempts = next;
+    this.contexts.set(sessionId, context);
+    return next;
+  }
+
+  resetEmailAttempts(sessionId: string): void {
+    const context = this.getContext(sessionId);
+    context.emailAttempts = 0;
+    this.contexts.set(sessionId, context);
+  }
+
+  setEmailVerificationLocked(sessionId: string, locked: boolean): void {
+    const context = this.getContext(sessionId);
+    context.emailVerificationLocked = locked;
+    this.contexts.set(sessionId, context);
+  }
+
+  isEmailVerificationLocked(sessionId: string): boolean {
+    const context = this.getContext(sessionId);
+    return context.emailVerificationLocked === true;
+  }
+
+  setEmployeeProfile(sessionId: string, profile: { id: string; name: string; email: string }): void {
+    this.updateContext(sessionId, {
+      userEmail: profile.email,
+      userName: profile.name,
+      employeeName: profile.name,
+      employeeId: profile.id,
+      awaitingEmail: false,
+      emailAttempts: 0,
+      emailVerificationLocked: false
+    });
+  }
+
+  clearEmployeeProfile(sessionId: string): void {
+    const context = this.getContext(sessionId);
+    delete context.employeeId;
+    delete context.employeeName;
+    delete context.userName;
+    delete context.userEmail;
+    context.awaitingEmail = true;
+    context.emailAttempts = 0;
+    context.emailVerificationLocked = false;
+    this.contexts.set(sessionId, context);
+  }
+
+  getEmployeeId(sessionId: string): string | undefined {
+    const context = this.getContext(sessionId);
+    return context.employeeId;
+  }
+
+  getEmployeeName(sessionId: string): string | undefined {
+    const context = this.getContext(sessionId);
+    return context.employeeName || context.userName;
   }
 
   /**

@@ -1,80 +1,24 @@
 {
-  "year": 2024,
+  "year": 2025,
   "companyName": "Winfomi Technologies",
-  "totalHolidays": 12,
+  "totalHolidays": 16,
   "holidays": [
-    {
-      "date": "2024-01-26",
-      "name": "Republic Day",
-      "type": "National",
-      "optional": false
-    },
-    {
-      "date": "2024-03-08",
-      "name": "Holi",
-      "type": "Festival",
-      "optional": false
-    },
-    {
-      "date": "2024-03-29",
-      "name": "Good Friday",
-      "type": "Religious",
-      "optional": false
-    },
-    {
-      "date": "2024-04-11",
-      "name": "Eid ul-Fitr",
-      "type": "Festival",
-      "optional": false
-    },
-    {
-      "date": "2024-08-15",
-      "name": "Independence Day",
-      "type": "National",
-      "optional": false
-    },
-    {
-      "date": "2024-08-19",
-      "name": "Raksha Bandhan",
-      "type": "Festival",
-      "optional": true
-    },
-    {
-      "date": "2024-09-02",
-      "name": "Ganesh Chaturthi",
-      "type": "Festival",
-      "optional": false
-    },
-    {
-      "date": "2024-10-02",
-      "name": "Gandhi Jayanti",
-      "type": "National",
-      "optional": false
-    },
-    {
-      "date": "2024-10-12",
-      "name": "Dussehra",
-      "type": "Festival",
-      "optional": false
-    },
-    {
-      "date": "2024-11-01",
-      "name": "Diwali",
-      "type": "Festival",
-      "optional": false
-    },
-    {
-      "date": "2024-11-15",
-      "name": "Guru Nanak Jayanti",
-      "type": "Religious",
-      "optional": true
-    },
-    {
-      "date": "2024-12-25",
-      "name": "Christmas Day",
-      "type": "Religious",
-      "optional": false
-    }
+    { "date": "2025-12-25", "name": "Christmas Day", "type": "Religious", "optional": false },
+    { "date": "2025-12-31", "name": "New Year's Eve", "type": "Festival", "optional": true },
+    { "date": "2026-01-01", "name": "New Year's Day", "type": "Festival", "optional": false },
+    { "date": "2026-01-26", "name": "Republic Day", "type": "National", "optional": false },
+    { "date": "2026-03-06", "name": "Holi", "type": "Festival", "optional": false },
+    { "date": "2026-04-03", "name": "Good Friday", "type": "Religious", "optional": false },
+    { "date": "2026-04-21", "name": "Eid ul-Fitr", "type": "Festival", "optional": false },
+    { "date": "2026-08-15", "name": "Independence Day", "type": "National", "optional": false },
+    { "date": "2026-08-28", "name": "Raksha Bandhan", "type": "Festival", "optional": true },
+    { "date": "2026-09-20", "name": "Ganesh Chaturthi", "type": "Festival", "optional": false },
+    { "date": "2026-10-02", "name": "Gandhi Jayanti", "type": "National", "optional": false },
+    { "date": "2026-10-21", "name": "Dussehra", "type": "Festival", "optional": false },
+    { "date": "2026-11-08", "name": "Diwali", "type": "Festival", "optional": false },
+    { "date": "2026-11-24", "name": "Guru Nanak Jayanti", "type": "Religious", "optional": true },
+    { "date": "2026-12-25", "name": "Christmas Day", "type": "Religious", "optional": false },
+    { "date": "2026-12-31", "name": "New Year's Eve", "type": "Festival", "optional": true }
   ],
   "notes": {
     "workingDays": "Monday to Friday",

@@ -30,17 +30,28 @@
         
         <div class="loading" id="loading">🤔 Thinking...</div>
         
-        <div class="input-container">
-         <input type="text" id="messageInput" class="message-input" 
-             placeholder="Ask naturally — e.g. 'Apply leave Oct 18-20 for wedding' or 'What's my leave balance?'"
-             onkeypress="handleKeyPress(event)"
-             oninput="handleInputChange(event)"
-             autocomplete="off">
-            <div id="dropdown" class="dropdown-menu" style="display:none;"></div>
-            <button id="micButton" class="send-button" title="Speak your request" onclick="toggleSpeechRecognition()" style="background:#10b981">🎤</button>
-            <button id="ttsToggle" class="send-button" title="Toggle speech output" onclick="toggleTts()">🔊</button>
-            <button class="send-button" onclick="sendMessage()">Send</button>
-        </div>
+
+                <!-- Email Modal -->
+                <div id="emailModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+                    <div style="background:#fff; padding:32px 24px; border-radius:8px; box-shadow:0 2px 16px #0002; max-width:350px; margin:auto; text-align:center;">
+                        <h2>Enter your Winfomi Email</h2>
+                        <input id="emailInput" type="email" placeholder="example@winfomi.com" style="width:90%;padding:8px;margin:16px 0;" autocomplete="off">
+                        <div id="emailError" style="color:#dc2626;min-height:24px;"></div>
+                        <button onclick="submitEmail()" style="background:#10b981;color:#fff;padding:8px 24px;border:none;border-radius:4px;">Submit</button>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                 <input type="text" id="messageInput" class="message-input" 
+                         placeholder="Ask naturally — e.g. 'Apply leave Oct 18-20 for wedding' or 'What's my leave balance?'"
+                         onkeypress="handleKeyPress(event)"
+                         oninput="handleInputChange(event)"
+                         autocomplete="off">
+                        <div id="dropdown" class="dropdown-menu" style="display:none;"></div>
+                        <button id="micButton" class="send-button" title="Speak your request" onclick="toggleSpeechRecognition()" style="background:#10b981">🎤</button>
+                        <button id="ttsToggle" class="send-button" title="Toggle speech output" onclick="toggleTts()">🔊</button>
+                        <button class="send-button" onclick="sendMessage()">Send</button>
+                </div>
         
         <div id="quickActions" class="quick-actions" style="display:none;">
             <h3>Quick Actions:</h3>
@@ -75,22 +86,48 @@
             return sessionId;
         }
 
-        // Store employee email in localStorage
-        let employeeEmail = localStorage.getItem('employeeEmail') || null;
-        
-        // Check if email is stored, if not, ask for it on first leave/WFH request
-        function getEmployeeEmail() {
-            if (!employeeEmail) {
-                const email = prompt('Please enter your email address for notifications:');
-                if (email && email.includes('@')) {
+
+                // Store employee email in localStorage
+                let employeeEmail = localStorage.getItem('employeeEmail') || null;
+
+                function showEmailModal() {
+                    document.getElementById('emailModal').style.display = 'flex';
+                    document.getElementById('messageInput').disabled = true;
+                }
+
+                function hideEmailModal() {
+                    document.getElementById('emailModal').style.display = 'none';
+                    document.getElementById('messageInput').disabled = false;
+                }
+
+                function submitEmail() {
+                    const input = document.getElementById('emailInput');
+                    const error = document.getElementById('emailError');
+                    const email = input.value.trim();
+                    if (!/^\S+@winfomi\.com$/i.test(email)) {
+                        error.textContent = 'Please enter a valid Winfomi email.';
+                        return;
+                    }
                     employeeEmail = email;
                     localStorage.setItem('employeeEmail', email);
-                    return email;
+                    error.textContent = '';
+                    hideEmailModal();
                 }
-                return null;
-            }
-            return employeeEmail;
-        }
+
+                function getEmployeeEmail() {
+                    if (!employeeEmail) {
+                        showEmailModal();
+                        return null;
+                    }
+                    return employeeEmail;
+                }
+
+                // Show modal on load if email not set
+                window.addEventListener('DOMContentLoaded', () => {
+                    if (!employeeEmail) {
+                        showEmailModal();
+                    }
+                });
 
         // Speech Recognition (STT) setup
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -24,7 +24,17 @@ export class IntentDetector {
     const lowerMessage = message.toLowerCase();
     const entities: any = {};
     
-    // Priority 1: WFH Detection (most specific)
+
+    // Priority 1: List Requests (history/all/list/show/fetch my leave/wfh requests)
+    if (this.isListRequestsQuery(lowerMessage)) {
+      return {
+        intent: 'list_requests',
+        confidence: 0.95,
+        entities: this.extractListRequestsEntities(message)
+      };
+    }
+
+    // Priority 2: WFH Detection (most specific)
     if (this.isWfhRequest(lowerMessage)) {
       return {
         intent: 'apply_wfh',
@@ -33,7 +43,7 @@ export class IntentDetector {
       };
     }
 
-    // Priority 2: Leave Application Detection
+    // Priority 3: Leave Application Detection
     if (this.isLeaveRequest(lowerMessage)) {
       return {
         intent: 'apply_leave',
@@ -42,7 +52,7 @@ export class IntentDetector {
       };
     }
 
-    // Priority 3: Policy Queries
+    // Priority 4: Policy Queries
     if (lowerMessage.includes('holiday') && (lowerMessage.includes('list') || lowerMessage.includes('calendar'))) {
       return { intent: 'holiday_list', confidence: 0.9, entities: {} };
     }
@@ -55,10 +65,70 @@ export class IntentDetector {
       return { intent: 'wfh_policy', confidence: 0.95, entities: {} };
     }
 
-    // Priority 4: Leave Balance Query
+    // Priority 5: Leave Balance Query
     if (this.isLeaveBalanceQuery(lowerMessage)) {
       return { intent: 'leave_balance', confidence: 0.85, entities: {} };
     }
+  /**
+   * Check if message is a request to list all leave/WFH requests (history, all, list, show, fetch)
+   */
+  private isListRequestsQuery(message: string): boolean {
+    const lower = message.toLowerCase();
+    // Match common verbs and request/record words in any order
+    // Match common verbs and request/record words in any order, and allow for 'all' as a catch-all
+    if (
+      lower.match(/\b(give|show|list|fetch|get|see|display|all|history)\b/) &&
+      (lower.includes('leave') || lower.includes('wfh') || lower.includes('work from home') || lower.includes('request') || lower.includes('requests'))
+    ) {
+      return true;
+    }
+    // Match 'display all requests', 'show all my requests', etc.
+    if (lower.match(/(display|show|list|fetch|get|see|all).*requests?/)) {
+      return true;
+    }
+    // Also match phrases like 'all my leave requests', 'all wfh requests', etc.
+    if (lower.match(/all.*(leave|wfh|work from home).*requests?/)) {
+      return true;
+    }
+    // Fallback to previous patterns
+    const patterns = [
+      /\b(all|list|show|fetch|get|history)\b.*\b(leave|wfh|request|requests|history)\b/,
+      /\b(leave|wfh|request|requests|history)\b.*\b(all|list|show|fetch|get|history)\b/
+    ];
+    return patterns.some((p) => p.test(message));
+  }
+
+  /**
+   * Extract entities for list_requests intent (type: leave/wfh/both, and time filter)
+   */
+  private extractListRequestsEntities(message: string): any {
+    const entities: any = {};
+    const lower = message.toLowerCase();
+    // Type
+    if (lower.includes('leave') && lower.includes('wfh')) {
+      entities.type = 'both';
+    } else if (lower.includes('leave')) {
+      entities.type = 'leave';
+    } else if (lower.includes('wfh') || lower.includes('work from home')) {
+      entities.type = 'wfh';
+    } else {
+      entities.type = 'both';
+    }
+    // Time filter
+    const monthMatch = message.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i);
+    if (monthMatch) {
+      entities.month = monthMatch[1];
+    }
+    const yearMatch = message.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      entities.year = yearMatch[1];
+    }
+    const weekMatch = message.match(/\bweek\s*(\d{1,2})\b/i);
+    if (weekMatch) {
+      entities.week = weekMatch[1];
+    }
+    return entities;
+  }
 
     // Default: General Query
     return { intent: 'general_query', confidence: 0.5, entities: {} };

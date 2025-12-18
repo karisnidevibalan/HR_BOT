@@ -41,8 +41,12 @@ describe('ChatController', () => {
             const sessionId = 'test-session-policy';
             mockRequest.headers = { 'x-session-id': sessionId };
             
-            // Set email for this session
-            contextManager.setUserEmail(sessionId, 'test@winfomi.com');
+            // Set verified employee profile for this session
+            contextManager.setEmployeeProfile(sessionId, {
+                id: '005TEST01',
+                name: 'Test User',
+                email: 'test@winfomi.com'
+            });
             
             mockRequest.body = { message: 'What is the leave policy?' };
             await chatController(mockRequest as Request, mockResponse as Response);
@@ -56,8 +60,12 @@ describe('ChatController', () => {
             const sessionId = 'test-session-holiday';
             mockRequest.headers = { 'x-session-id': sessionId };
             
-            // Set email for this session
-            contextManager.setUserEmail(sessionId, 'test@winfomi.com');
+            // Set verified employee profile for this session
+            contextManager.setEmployeeProfile(sessionId, {
+                id: '005TEST02',
+                name: 'Holiday Tester',
+                email: 'test@winfomi.com'
+            });
             
             mockRequest.body = { message: 'Show me the holiday calendar' };
             await chatController(mockRequest as Request, mockResponse as Response);

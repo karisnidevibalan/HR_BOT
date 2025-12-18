@@ -61,7 +61,11 @@ describe('Leave request scenarios', () => {
 
   function primeSession(sessionId: string) {
     contextManager.clearContext(sessionId);
-    contextManager.setUserEmail(sessionId, 'employee@winfomi.com');
+    contextManager.setEmployeeProfile(sessionId, {
+      id: `005TEST-${sessionId}`,
+      name: 'Employee Tester',
+      email: 'employee@winfomi.com'
+    });
   }
 
   it('LV-01: confirms casual leave for tomorrow without clarification', async () => {

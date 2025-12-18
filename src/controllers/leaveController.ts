@@ -1,5 +1,8 @@
+
 import { Request, Response } from 'express';
 import { SalesforceService } from '../services/salesforceService';
+import path from 'path';
+import fs from 'fs';
 
 const salesforceService = new SalesforceService();
 
@@ -8,10 +11,38 @@ export const leaveController = {
     try {
       const { employeeName, leaveType, startDate, endDate, reason } = req.body;
 
+
       // Validate required fields
       if (!employeeName || !leaveType || !startDate || !endDate) {
         return res.status(400).json({ 
           error: 'Missing required fields: employeeName, leaveType, startDate, endDate' 
+        });
+      }
+
+      // Load holidays from holidays.json
+      const holidaysPath = path.join(__dirname, '../../data/holidays.json');
+      let holidaysList: any[] = [];
+      try {
+        const holidaysData = fs.readFileSync(holidaysPath, 'utf-8');
+        const holidaysJson = JSON.parse(holidaysData);
+        holidaysList = holidaysJson.holidays || [];
+      } catch (e) {
+        console.error('Failed to load holidays.json:', e);
+      }
+
+      // Check if requested leave date(s) overlap with a holiday
+      const leaveDates = [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        leaveDates.push(d.toISOString().slice(0, 10));
+      }
+      const holidayDates = holidaysList.map(h => h.date);
+      const conflictHoliday = leaveDates.find(date => holidayDates.includes(date));
+      if (conflictHoliday) {
+        const holidayObj = holidaysList.find(h => h.date === conflictHoliday);
+        return res.status(400).json({
+          error: `Cannot apply leave on ${conflictHoliday} (${holidayObj?.name || 'Holiday'}). It is a company holiday.`
         });
       }
 

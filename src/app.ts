@@ -1,38 +1,42 @@
-import express from 'express';
+// src/app.ts
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
 import path from 'path';
+
+// __filename and __dirname are available in CommonJS modules (Node.js)
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// CommonJS: __filename and __dirname are available by default
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Import controllers (will create these)
+// Import controllers and services
 import { chatController } from './controllers/chatController';
-import { leaveController } from './controllers/leaveController';
-import { wfhController } from './controllers/wfhController';
 import { SalesforceService } from './services/salesforceService';
-
+import managerRoutes from './routes/managerRoutes';
 const salesforceService = new SalesforceService();
 
 // Routes
 app.post('/api/chat', chatController);
-app.post('/api/leave/apply', leaveController.applyLeave);
-app.post('/api/wfh/apply', wfhController.applyWFH);
-app.get('/api/leave/status/:id', leaveController.getLeaveStatus);
-app.get('/api/wfh/status/:id', wfhController.getWFHStatus);
 
-// Manager approval routes
-app.get('/approve', async (req, res) => {
+// Manager approval routes (email links)
+app.get('/manager-dashboard', (req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '../public/manager-dashboard.html'));
+});
+app.get('/approve', async (req: Request, res: Response) => {
   try {
     const { id, action, token } = req.query;
 
+    // Validate required parameters
     if (!id || !action || !token) {
       return res.status(400).send(`
         <html>
@@ -60,7 +64,7 @@ app.get('/approve', async (req, res) => {
 
     // Get the record
     const record = await salesforceService.getRecord(id as string);
-    
+
     if (!record.success) {
       return res.status(404).send(`
         <html>
@@ -75,17 +79,21 @@ app.get('/approve', async (req, res) => {
 
     const leaveRecord = record.record;
 
+    // Determine Salesforce instance URL
+    const instanceUrl = process.env.SALESFORCE_LOGIN_URL?.includes('test')
+      ? 'https://winfomi--dev7.sandbox.my.salesforce.com'
+      : 'https://winfomi.my.salesforce.com';
+    const recordUrl = `${instanceUrl}/${id}`;
+
     if (action === 'approve') {
-      // Update record status to Approved - Salesforce Flow will send email automatically
+      // Update record status to Approved
       const updated = await salesforceService.updateRecordStatus(id as string, 'Approved');
-      
-      // Get Salesforce instance URL
-      const instanceUrl = process.env.SALESFORCE_LOGIN_URL?.includes('test') 
-        ? 'https://winfomi--dev7.sandbox.my.salesforce.com' 
-        : 'https://winfomi.my.salesforce.com';
-      const recordUrl = `${instanceUrl}/${id}`;
-      
-      res.send(`
+
+      if (!updated.success) {
+        throw new Error(updated.error || 'Failed to update record');
+      }
+
+      return res.send(`
         <html>
           <head>
             <title>Leave Approved</title>
@@ -105,6 +113,8 @@ app.get('/approve', async (req, res) => {
             <div class="details">
               <h3>The leave request has been successfully approved.</h3>
               <p><strong>Record ID:</strong> ${id}</p>
+              <p><strong>Employee:</strong> ${leaveRecord.Employee_Name__c || 'N/A'}</p>
+              <p><strong>Leave Type:</strong> ${leaveRecord.Leave_Type__c || 'N/A'}</p>
             </div>
             <p>The employee will be notified via email about this decision.</p>
             <p style="text-align: center;">
@@ -114,16 +124,14 @@ app.get('/approve', async (req, res) => {
         </html>
       `);
     } else if (action === 'reject') {
-      // Update record status to Rejected (Salesforce Flow will send rejection email)
+      // Update record status to Rejected
       const updated = await salesforceService.updateRecordStatus(id as string, 'Rejected');
-      
-      // Get Salesforce instance URL from the connection
-      const instanceUrl = process.env.SALESFORCE_LOGIN_URL?.includes('test') 
-        ? 'https://winfomi--dev7.sandbox.my.salesforce.com' 
-        : 'https://winfomi.my.salesforce.com';
-      const recordUrl = `${instanceUrl}/${id}`;
-      
-      res.send(`
+
+      if (!updated.success) {
+        throw new Error(updated.error || 'Failed to update record');
+      }
+
+      return res.send(`
         <html>
           <head>
             <title>Leave Rejected</title>
@@ -142,11 +150,11 @@ app.get('/approve', async (req, res) => {
             </div>
             <div class="details">
               <h3>Leave Details:</h3>
-              <p><strong>Employee:</strong> ${leaveRecord.Employee_Name__c}</p>
-              <p><strong>Leave Type:</strong> ${leaveRecord.Leave_Type__c}</p>
-              <p><strong>Start Date:</strong> ${leaveRecord.Start_Date__c}</p>
-              <p><strong>End Date:</strong> ${leaveRecord.End_Date__c}</p>
-              <p><strong>Reason:</strong> ${leaveRecord.Reason__c}</p>
+              <p><strong>Employee:</strong> ${leaveRecord.Employee_Name__c || 'N/A'}</p>
+              <p><strong>Leave Type:</strong> ${leaveRecord.Leave_Type__c || 'N/A'}</p>
+              <p><strong>Start Date:</strong> ${leaveRecord.Start_Date__c || 'N/A'}</p>
+              <p><strong>End Date:</strong> ${leaveRecord.End_Date__c || 'N/A'}</p>
+              <p><strong>Reason:</strong> ${leaveRecord.Reason__c || 'N/A'}</p>
               <p><strong>Status:</strong> <span style="color: red;">Rejected</span></p>
             </div>
             <p>The employee will be notified via email about this decision.</p>
@@ -167,25 +175,25 @@ app.get('/approve', async (req, res) => {
         </html>
       `);
     }
-
-  } catch (error) {
-    console.error('Approval Error:', error);
-    res.status(500).send(`
+  } catch (error: any) {
+    console.error('❌ Approval Error:', error.message);
+    return res.status(500).send(`
       <html>
         <head><title>Error</title></head>
         <body style="font-family: Arial; padding: 40px; text-align: center;">
           <h1>❌ Error Processing Request</h1>
           <p>An error occurred while processing your request. Please try again later.</p>
+          <p style="color: gray; font-size: 12px;">${error.message || 'Unknown error'}</p>
         </body>
       </html>
     `);
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+// Health check endpoint
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'OK',
     message: 'HR Agent Bot is running',
     timestamp: new Date().toISOString(),
     demoMode: process.env.DEMO_MODE === 'true'
@@ -193,12 +201,49 @@ app.get('/api/health', (req, res) => {
 });
 
 // Serve the chat interface
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`🤖 HR Agent Bot running on http://localhost:${PORT}`);
-  console.log(`📋 Demo Mode: ${process.env.DEMO_MODE === 'true' ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`🏢 Company: ${process.env.COMPANY_NAME || 'Winfomi'}`);
+// Manager dashboard routes
+app.use('/api/manager', managerRoutes);
+
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Route not found',
+    path: req.path
+  });
 });
+
+// Error handler middleware
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('❌ Server Error:', err);
+  res.status(500).json({
+    success: false,
+    error: err.message || 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
+});
+
+export { app };
+export default app;
+
+// Start server if this is the main module
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`🤖 HR Agent Bot running on http://localhost:${PORT}`);
+    console.log(`📋 Demo Mode: ${process.env.DEMO_MODE === 'true' ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`🏢 Company: ${process.env.COMPANY_NAME || 'Winfomi'}`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
+}

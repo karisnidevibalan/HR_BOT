@@ -3,9 +3,12 @@ import jsforce from 'jsforce';
 
 interface MockLeaveRecord {
     Id: string;
+    Employee__c: string | null;
     Employee_Name__c: string;
     Employee_Email__c: string | null;
+    Name: string;
     Leave_Type__c: string;
+    Type__c?: string;
     Start_Date__c: string;
     End_Date__c: string;
     Reason__c: string;
@@ -40,6 +43,68 @@ interface MockReimbursementRecord {
 }
 
 export class SalesforceService {
+        /**
+         * Get all leave requests for an employee by email
+         * In demo mode, filter mock records. In live mode, query Salesforce.
+         */
+        async getLeaveRequestsByEmail(employeeEmail: string): Promise<any[]> {
+            if (this.demoMode) {
+                // Filter mock leave records by email (case-insensitive)
+                return this.mockLeaveRecords.filter(
+                    r => r.Employee_Email__c && r.Employee_Email__c.toLowerCase() === employeeEmail.toLowerCase()
+                );
+            }
+            try {
+                const result = await this.conn.query(`
+                    SELECT Id, Start_Date__c, End_Date__c, Leave_Type__c, Status__c, Reason__c, Duration_Days__c, CreatedDate
+                    FROM Leave_Request__c
+                    WHERE Employee__c IN (
+                        SELECT Id FROM User WHERE Email = '${employeeEmail.toLowerCase()}'
+                    )
+                    ORDER BY CreatedDate DESC
+                    LIMIT 20
+                `);
+                return result.records || [];
+            } catch (error) {
+                console.error('Error fetching leave requests:', error);
+                return [];
+            }
+        }
+
+        /**
+         * Get all WFH requests for an employee by email
+         * In demo mode, filter mock records. In live mode, query Salesforce.
+         */
+        async getWfhRequestsByEmail(employeeEmail: string): Promise<any[]> {
+            if (this.demoMode) {
+                // Filter mock WFH records by email (case-insensitive)
+                return this.mockWfhRecords.filter(
+                    r => r.email__c && r.email__c.toLowerCase() === employeeEmail.toLowerCase()
+                );
+            }
+            try {
+                const result = await this.conn.query(`
+                    SELECT Id, Start_Date__c, End_Date__c, Status__c, Reason__c, CreatedDate
+                    FROM WFH_Request__c
+                    WHERE Employee__c IN (
+                        SELECT Id FROM User WHERE Email = '${employeeEmail.toLowerCase()}'
+                    )
+                    ORDER BY CreatedDate DESC
+                    LIMIT 20
+                `);
+                return result.records || [];
+            } catch (error) {
+                console.error('Error fetching WFH requests:', error);
+                return [];
+            }
+        }
+
+        /**
+         * Check if in demo mode (for testing without Salesforce)
+         */
+        isDemoMode(): boolean {
+            return this.demoMode;
+        }
     private mockLeaveRecords: MockLeaveRecord[] = [];
     private mockWfhRecords: MockWfhRecord[] = [];
     private mockReimbursements: MockReimbursementRecord[] = [];
@@ -47,9 +112,20 @@ export class SalesforceService {
     private demoMode: boolean;
     private conn: any;
     private mockLeaveBalances: Record<string, { total: number; used: number }>;
+    private isAuthenticated = false;
 
     constructor(instanceUrl?: string, accessToken?: string) {
-        this.demoMode = process.env.DEMO_MODE === 'true';
+        const hasCredentials = Boolean(
+            process.env.SALESFORCE_USERNAME &&
+            process.env.SALESFORCE_PASSWORD &&
+            process.env.SALESFORCE_SECURITY_TOKEN
+        );
+
+        this.demoMode = process.env.DEMO_MODE === 'true' || !hasCredentials;
+        if (!hasCredentials && process.env.DEMO_MODE !== 'true') {
+            console.log('ℹ️ Salesforce credentials not found. Falling back to DEMO MODE.');
+        }
+
         console.log('🔧 Salesforce Service initialized in', this.demoMode ? 'DEMO MODE' : 'LIVE MODE');
 
         this.mockLeaveBalances = {
@@ -63,7 +139,8 @@ export class SalesforceService {
         // Initialize Salesforce connection for live mode
         if (!this.demoMode) {
             this.conn = new jsforce.Connection({
-                loginUrl: process.env.SALESFORCE_LOGIN_URL || 'https://test.salesforce.com'
+                loginUrl: process.env.SALESFORCE_LOGIN_URL || 'https://test.salesforce.com',
+                version: '61.0'
             });
         }
         
@@ -84,10 +161,12 @@ export class SalesforceService {
             console.log('✅ Salesforce authentication successful');
             console.log('User ID:', userInfo.id);
             console.log('Org ID:', userInfo.organizationId);
+            this.isAuthenticated = true;
             
             return true;
         } catch (error: any) {
             console.error('❌ Salesforce authentication failed:', error.message);
+            this.isAuthenticated = false;
             return false;
         }
     }
@@ -96,9 +175,12 @@ export class SalesforceService {
         // Add a pre-existing leave for testing overlap detection
         this.mockLeaveRecords.push({
             Id: `LEAVE_${this.nextId++}`,
+            Employee__c: null,
             Employee_Name__c: 'Current User',
             Employee_Email__c: null,
+            Name: 'Current User',
             Leave_Type__c: 'ANNUAL',
+            Type__c: 'Leave',
             Start_Date__c: '2025-12-18',
             End_Date__c: '2025-12-22',
             Reason__c: 'Christmas vacation',
@@ -140,6 +222,8 @@ export class SalesforceService {
             
             // Create Leave record in Salesforce
             const recordData: any = {
+                Employee__c: leaveData.employeeId || null,
+                Employee_Email__c: leaveData.employeeEmail || null,
                 Employee_Name__c: leaveData.employeeName,
                 Leave_Type__c: sfLeaveType,
                 Start_Date__c: leaveData.startDate,
@@ -148,14 +232,6 @@ export class SalesforceService {
                 Status__c: 'Pending',
                 Request_Source__c: 'Chatbot'
             };
-            
-            // Add email if provided
-            if (leaveData.employeeEmail) {
-                recordData.Employee_Email__c = leaveData.employeeEmail;
-                console.log('✅ Email added to record:', leaveData.employeeEmail);
-            } else {
-                console.log('⚠️ No employee email provided in leaveData');
-            }
             
             const result = await this.conn.sobject('Leave_Request__c').create(recordData);
 
@@ -181,8 +257,10 @@ export class SalesforceService {
     private async createMockLeaveRecord(leaveData: any): Promise<any> {
         const record = {
             Id: `LEAVE_${this.nextId++}`,
+            Employee__c: leaveData.employeeId || null,
             Employee_Name__c: leaveData.employeeName,
             Employee_Email__c: leaveData.employeeEmail || null,
+            Name: leaveData.employeeName || 'Leave Request',
             Leave_Type__c: leaveData.leaveType,
             Start_Date__c: leaveData.startDate,
             End_Date__c: leaveData.endDate,
@@ -212,6 +290,86 @@ export class SalesforceService {
         
         // Real Salesforce implementation
         return this.createRealWFHRecord(wfhRequest);
+    }
+
+    private buildFriendlyNameFromEmail(email: string): string {
+        const localPart = email.split('@')[0] || 'user';
+        return localPart
+            .split(/[._-]/)
+            .filter(Boolean)
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ') || 'Demo User';
+    }
+
+    async lookupUserByEmail(email: string): Promise<{ success: boolean; user?: { id: string; name: string; email: string }; error?: string; source?: 'salesforce' | 'fallback' }> {
+        const normalizedEmail = (email || '').trim();
+
+        if (!normalizedEmail) {
+            return { success: false, error: 'Email is required' };
+        }
+
+        const friendlyName = this.buildFriendlyNameFromEmail(normalizedEmail.toLowerCase());
+
+        if (this.demoMode) {
+            return {
+                success: true,
+                user: {
+                    id: `005DEMO${this.nextId++}`,
+                    name: friendlyName,
+                    email: normalizedEmail.toLowerCase()
+                },
+                source: 'fallback'
+            };
+        }
+
+        try {
+            if (!this.isAuthenticated) {
+                const authSuccess = await this.authenticate();
+                if (!authSuccess) {
+                    throw new Error('Unable to authenticate with Salesforce for user lookup');
+                }
+            }
+
+            const escapedEmail = normalizedEmail.replace(/'/g, "\\'");
+            const query = `SELECT Id, Name, Email FROM User WHERE Email = '${escapedEmail}' LIMIT 1`;
+            const result = await this.conn.query(query);
+
+            if (Array.isArray(result.records) && result.records.length === 1) {
+                const user = result.records[0];
+                return {
+                    success: true,
+                    user: {
+                        id: user.Id,
+                        name: user.Name,
+                        email: user.Email
+                    },
+                    source: 'salesforce'
+                };
+            }
+
+            return {
+                success: true,
+                user: {
+                    id: `005DEMO${this.nextId++}`,
+                    name: friendlyName,
+                    email: normalizedEmail.toLowerCase()
+                },
+                source: 'fallback'
+            };
+
+        } catch (error: any) {
+            console.warn('⚠️ Salesforce user lookup error, using fallback profile:', error?.message || error);
+            return {
+                success: true,
+                user: {
+                    id: `005DEMO${this.nextId++}`,
+                    name: friendlyName,
+                    email: normalizedEmail.toLowerCase()
+                },
+                error: error?.message,
+                source: 'fallback'
+            };
+        }
     }
 
     private async createRealWFHRecord(wfhData: any): Promise<any> {
@@ -278,7 +436,7 @@ export class SalesforceService {
             Name: generatedName,
             Employee_Name__c: wfhData.employeeName,
             email__c: wfhData.employeeEmail || null,
-            Employee__c: null,
+            Employee__c: wfhData.employeeId || null,
             Date__c: normalizedDate,
             Reason__c: wfhData.reason,
             Status__c: 'Pending Approval',
@@ -383,7 +541,7 @@ export class SalesforceService {
         // Real Salesforce update
         return this.updateRealRecordStatus(recordId, status);
     }
-
+      
     private async updateRealRecordStatus(recordId: string, status: string): Promise<any> {
         try {
             const authSuccess = await this.authenticate();
@@ -481,6 +639,7 @@ export class SalesforceService {
             }
 
             // Query Salesforce for overlapping leave records
+
             const startDateLiteral = this.toSoqlDateLiteral(startDate);
             const endDateLiteral = this.toSoqlDateLiteral(endDate);
 
@@ -489,22 +648,26 @@ export class SalesforceService {
                 return { hasOverlap: false, overlappingLeaves: [] };
             }
 
-            const results = await this.conn.sobject('Leave_Request__c')
-                .find({
-                    Employee_Name__c: employeeName,
-                    Status__c: { $ne: 'Rejected' },
-                    Start_Date__c: { $lte: endDateLiteral },
-                    End_Date__c: { $gte: startDateLiteral }
-                }, [
-                    'Id',
-                    'Leave_Type__c',
-                    'Start_Date__c',
-                    'End_Date__c',
-                    'Reason__c',
-                    'Status__c'
-                ])
-                .limit(5)
-                .execute();
+            // Use raw SOQL to avoid quoting date fields
+            const soql = `SELECT Id, Leave_Type__c, Start_Date__c, End_Date__c, Reason__c, Status__c FROM Leave_Request__c WHERE Employee_Name__c = '${employeeName.replace(/'/g, "\\'")}' AND Status__c != 'Rejected' AND Start_Date__c <= ${endDateLiteral} AND End_Date__c >= ${startDateLiteral} LIMIT 5`;
+            const results = await this.conn.query(soql);
+            const records = results.records || [];
+
+            if (Array.isArray(records) && records.length > 0) {
+                return {
+                    hasOverlap: true,
+                    overlappingLeaves: records.map((leave: any) => ({
+                        id: leave.Id,
+                        leaveType: leave.Leave_Type__c,
+                        startDate: leave.Start_Date__c,
+                        endDate: leave.End_Date__c,
+                        reason: leave.Reason__c,
+                        status: leave.Status__c
+                    }))
+                };
+            }
+
+            return { hasOverlap: false, overlappingLeaves: [] };
 
             if (Array.isArray(results) && results.length > 0) {
                 return {

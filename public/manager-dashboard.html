@@ -135,104 +135,107 @@
             </div>
         </div>
 
-        <div id="requestsList" class="requests-grid">
-            <div class="loading">⏳ Loading pending requests...</div>
+        <div id="leaveRequestsSection">
+            <h2>📝 Leave Requests</h2>
+            <div id="leaveRequestsList" class="requests-grid">
+                <div class="loading">⏳ Loading leave requests...</div>
+            </div>
+        </div>
+        <div id="wfhRequestsSection" style="margin-top:40px;">
+            <h2>🏠 WFH Requests</h2>
+            <div id="wfhRequestsList" class="requests-grid">
+                <div class="loading">⏳ Loading WFH requests...</div>
+            </div>
         </div>
     </div>
 
     <script>
-        async function loadPendingRequests() {
+        async function loadManagerRequests() {
             try {
-                const response = await fetch('/api/manager/pending');
+                const response = await fetch('/api/manager/requests');
                 const data = await response.json();
 
-                const container = document.getElementById('requestsList');
-                const countBadge = document.getElementById('pendingCount');
-
-                if (data.success && data.requests && data.requests.length > 0) {
-                    countBadge.textContent = `${data.requests.length} Pending`;
-                    
-                    container.innerHTML = data.requests.map(req => {
-                        const id = req.Id || req.id;
-                        const empName = req.Employee_Name__c || req.employeeName || 'Unknown';
-                        const leaveType = req.Leave_Type__c || req.leaveType || 'N/A';
-                        const startDate = req.Start_Date__c || req.startDate;
-                        const endDate = req.End_Date__c || req.endDate;
-                        const reason = req.Reason__c || req.reason || 'No reason provided';
-                        const source = req.Request_Source__c || 'N/A';
-                        
-                        const startFormatted = startDate ? new Date(startDate).toLocaleDateString() : '—';
-                        const endFormatted = endDate ? new Date(endDate).toLocaleDateString() : '—';
-                        
-                        return `
-                            <div class="request-item">
-                                <div class="request-header">
-                                    <div class="employee-name">${empName}</div>
-                                    <span class="request-badge badge-pending">Pending</span>
-                                </div>
-                                
-                                <div class="request-details">
-                                    <div class="detail-item">
-                                        <div class="detail-label">Leave Type</div>
-                                        <div class="detail-value">${leaveType}</div>
-                                    </div>
-                                    <div class="detail-item">
-                                        <div class="detail-label">Start Date</div>
-                                        <div class="detail-value">${startFormatted}</div>
-                                    </div>
-                                    <div class="detail-item">
-                                        <div class="detail-label">End Date</div>
-                                        <div class="detail-value">${endFormatted}</div>
-                                    </div>
-                                    <div class="detail-item">
-                                        <div class="detail-label">Request Source</div>
-                                        <div class="detail-value">${source}</div>
-                                    </div>
-                                </div>
-
-                                <div class="reason-text">
-                                    <strong>Reason:</strong> ${reason}
-                                </div>
-
-                                <div class="action-btns">
-                                    <button class="btn-review btn-approve-quick" onclick="quickApprove('${id}')">
-                                        ✅ Approve
-                                    </button>
-                                    <button class="btn-review btn-reject-quick" onclick="quickReject('${id}')">
-                                        ❌ Reject
-                                    </button>
-                                    <button class="btn-review btn-view-details" onclick="viewDetails('${id}')">
-                                        📋 Details
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
+                // Leave Requests
+                const leaveContainer = document.getElementById('leaveRequestsList');
+                if (data.success && data.leaveRequests && data.leaveRequests.length > 0) {
+                    leaveContainer.innerHTML = data.leaveRequests.map(req => renderRequestItem(req, 'leave')).join('');
                 } else {
-                    countBadge.textContent = '0 Pending';
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h2>🎉 All caught up!</h2>
-                            <p>No pending leave requests at the moment.</p>
-                        </div>
-                    `;
+                    leaveContainer.innerHTML = `<div class="empty-state">No pending leave requests.</div>`;
                 }
+
+                // WFH Requests
+                const wfhContainer = document.getElementById('wfhRequestsList');
+                if (data.success && data.wfhRequests && data.wfhRequests.length > 0) {
+                    wfhContainer.innerHTML = data.wfhRequests.map(req => renderRequestItem(req, 'wfh')).join('');
+                } else {
+                    wfhContainer.innerHTML = `<div class="empty-state">No pending WFH requests.</div>`;
+                }
+
+                // Update stats
+                const countBadge = document.getElementById('pendingCount');
+                const total = (data.leaveRequests?.length || 0) + (data.wfhRequests?.length || 0);
+                countBadge.textContent = `${total} Pending`;
             } catch (error) {
-                console.error('Error loading requests:', error);
-                document.getElementById('requestsList').innerHTML = `
-                    <div class="empty-state">
-                        <h2>❌ Error loading requests</h2>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+                document.getElementById('leaveRequestsList').innerHTML = `<div class="empty-state">❌ Error loading leave requests<br>${error.message}</div>`;
+                document.getElementById('wfhRequestsList').innerHTML = `<div class="empty-state">❌ Error loading WFH requests<br>${error.message}</div>`;
             }
         }
 
-        async function quickApprove(requestId) {
-            if (!confirm('Approve this leave request?')) return;
-            
+        function renderRequestItem(req, type) {
+            const id = req.Id || req.id;
+            const empName = req.Employee_Name__c || req.employeeName || 'Unknown';
+            const leaveType = req.Leave_Type__c || req.leaveType || (type === 'wfh' ? 'WFH' : 'N/A');
+            const startDate = req.Start_Date__c || req.startDate || req.Date__c;
+            const endDate = req.End_Date__c || req.endDate || '';
+            const reason = req.Reason__c || req.reason || 'No reason provided';
+            const source = req.Request_Source__c || 'N/A';
+            const status = req.Status__c || req.status || 'Pending';
+
+            const startFormatted = startDate ? new Date(startDate).toLocaleDateString() : '—';
+            const endFormatted = endDate ? new Date(endDate).toLocaleDateString() : '';
+
+            return `
+                <div class="request-item">
+                    <div class="request-header">
+                        <div class="employee-name">${empName}</div>
+                        <span class="request-badge badge-pending">${status}</span>
+                    </div>
+                    <div class="request-details">
+                        <div class="detail-item">
+                            <div class="detail-label">${type === 'wfh' ? 'WFH Date' : 'Leave Type'}</div>
+                            <div class="detail-value">${type === 'wfh' ? startFormatted : leaveType}</div>
+                        </div>
+                        ${type === 'leave' ? `
+                        <div class="detail-item">
+                            <div class="detail-label">Start Date</div>
+                            <div class="detail-value">${startFormatted}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">End Date</div>
+                            <div class="detail-value">${endFormatted}</div>
+                        </div>
+                        ` : ''}
+                        <div class="detail-item">
+                            <div class="detail-label">Request Source</div>
+                            <div class="detail-value">${source}</div>
+                        </div>
+                    </div>
+                    <div class="reason-text">
+                        <strong>Reason:</strong> ${reason}
+                    </div>
+                    <div class="action-btns">
+                        <button class="btn-review btn-approve-quick" onclick="quickApprove('${id}', '${type}')">✅ Approve</button>
+                        <button class="btn-review btn-reject-quick" onclick="quickReject('${id}', '${type}')">❌ Reject</button>
+                        <button class="btn-review btn-view-details" onclick="viewDetails('${id}')">📋 Details</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function quickApprove(requestId, type) {
+            if (!confirm('Approve this request?')) return;
             try {
-                const response = await fetch(`/api/manager/approve/${requestId}`, {
+                const response = await fetch(`/api/manager/approve/${requestId}?type=${type}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -240,11 +243,10 @@
                         managerName: 'Manager'
                     })
                 });
-                
                 const result = await response.json();
                 if (result.success) {
                     alert('✅ Request approved successfully!');
-                    loadPendingRequests(); // Reload the list
+                    loadManagerRequests(); // Reload the list
                 } else {
                     alert('❌ Failed to approve: ' + result.error);
                 }
@@ -253,12 +255,11 @@
             }
         }
 
-        async function quickReject(requestId) {
+        async function quickReject(requestId, type) {
             const reason = prompt('Enter rejection reason:');
             if (!reason) return;
-            
             try {
-                const response = await fetch(`/api/manager/reject/${requestId}`, {
+                const response = await fetch(`/api/manager/reject/${requestId}?type=${type}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -266,11 +267,10 @@
                         managerName: 'Manager'
                     })
                 });
-                
                 const result = await response.json();
                 if (result.success) {
                     alert('✅ Request rejected');
-                    loadPendingRequests(); // Reload the list
+                    loadManagerRequests(); // Reload the list
                 } else {
                     alert('❌ Failed to reject: ' + result.error);
                 }
@@ -283,8 +283,8 @@
             window.location.href = `/manager-approval.html?id=${requestId}`;
         }
 
-        // Load pending requests on page load
-        window.onload = loadPendingRequests;
+        // Load all requests on page load
+        window.onload = loadManagerRequests;
     </script>
 </body>
 </html>

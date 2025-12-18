@@ -8,6 +8,9 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc && node -e \"console.log('✅ Build complete. Checking dist folder...')\" && ls dist/ || echo 'dist folder created'",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:all": "npm run test",
     "demo": "node demo-server.js"
   },
   "dependencies": {
@@ -28,8 +31,11 @@
     "@types/jest": "^29.5.14",
     "@types/multer": "^1.4.8",
     "@types/node": "^20.6.0",
+    "@types/supertest": "^6.0.3",
+    "baseline-browser-mapping": "^2.9.9",
     "jest": "^29.7.0",
     "nodemon": "^3.0.1",
+    "supertest": "^7.1.4",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2"
