@@ -2,11 +2,9 @@
 coverage/
 tests/
 node_modules/
-dist/
 *.log
 *.md
 *.tsbuildinfo
-src/
 HRBotDoc/
 *.local
 .env*
