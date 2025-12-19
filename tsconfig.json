@@ -14,6 +14,6 @@
     "sourceMap": true,
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "api/chat.ts"],
   "exclude": ["node_modules", "dist", "tests"]
 }
