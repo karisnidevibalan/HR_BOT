@@ -6,13 +6,14 @@
   "scripts": {
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
-    "build": "tsc && node -e \"console.log('✅ Build complete. Checking dist folder...')\" && ls dist/ || echo 'dist folder created'",
+    "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:all": "npm run test",
     "demo": "node demo-server.js",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm install && npm run build",
+    "now-build": "npm run build"
   },
   "dependencies": {
     "@vercel/node": "^5.5.16",

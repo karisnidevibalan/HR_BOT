@@ -1,13 +1,11 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "dist/app.js",
-      "use": "@vercel/node",
-      "config": { "includeFiles": ["dist/**", "data/**"] }
-    }
+    { "src": "api/**/*.ts", "use": "@vercel/node" },
+    { "src": "public/*", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "dist/app.js" }
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/public/$1", "headers": { "cache-control": "public, max-age=3600" } }
   ]
 }
