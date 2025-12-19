@@ -1,0 +1,25 @@
+# Ignore test, coverage, and local-only files/folders
+coverage/
+tests/
+node_modules/
+dist/
+*.log
+*.md
+*.tsbuildinfo
+src/
+HRBotDoc/
+*.local
+.env*
+.git/
+.gitignore
+*.test.*
+*.spec.*
+
+# Allow api, public, data, and config files
+!api/
+!public/
+!data/
+!package.json
+!vercel.json
+!tsconfig.json
+!tsconfig.*.json
