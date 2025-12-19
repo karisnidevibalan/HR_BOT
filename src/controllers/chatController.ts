@@ -1,8 +1,9 @@
-import { AIService } from '../src/services/aiService';
-import { SalesforceService } from '../src/services/salesforceService';
-import dateParser from '../src/services/dateParser';
-import { entityExtractor } from '../src/utils/entityExtractor';
-import { contextManager } from '../src/utils/contextManager';
+import { AiService } from '../services/aiService'
+import {SalesforceService } from '../services/salesforceService'
+import dateParser from '../services/dateParser'
+import entityExtractor from '../utils/entityExtractor'
+import contextManager  from '../utils/contextManager'
+
 import { Request, Response } from 'express';
 
 
