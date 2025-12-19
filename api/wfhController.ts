@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           details: {
             recordId: result.id,
             employeeName: employeeName,
-            date: date,
+            date: wfhDate,
             reason: reason || 'No reason provided',
             status: 'Approved',
             submittedAt: new Date().toISOString(),
