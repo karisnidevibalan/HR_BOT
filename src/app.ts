@@ -23,9 +23,18 @@ app.use(express.static(path.join(__dirname, '../public')));
 import { chatController } from './controllers/chatController';
 import { SalesforceService } from './services/salesforceService';
 import managerRoutes from './routes/managerRoutes';
+import { setChatRoutes } from './routes/chat';
+import { setLeaveRoutes } from './routes/leave';
+import { setWfhRoutes } from './routes/wfh';
+
 const salesforceService = new SalesforceService();
 
-// Routes
+// Register all routes
+setChatRoutes(app);
+setLeaveRoutes(app);
+setWfhRoutes(app);
+
+// Existing chat route (kept for backward compatibility)
 app.post('/api/chat', chatController);
 
 // Manager approval routes (email links)

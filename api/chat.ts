@@ -1,56 +1,40 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { chatController } from '../src/controllers/chatController';
-import express from 'express';
-import bodyParser from 'body-parser';
+import { Request, Response } from 'express';
 
-const app = express();
-app.use(bodyParser.json());
-
-interface MockResponse {
-  statusCode?: number;
-  body?: any;
-  status: (code: number) => MockResponse;
-  json: (data: any) => MockResponse;
-  setHeader: () => void;
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+export default async function handler(vercelReq: VercelRequest, vercelRes: VercelResponse) {
+  if (vercelReq.method !== 'POST') {
+    return vercelRes.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const mockReq = {
-      ...req,
-      body: req.body,
-      method: req.method,
-      headers: req.headers
-    };
-    
-    const mockRes: MockResponse = {
-      statusCode: undefined,
-      body: undefined,
-      status: function(code: number) {
-        this.statusCode = code;
-        return this;
-      },
-      json: function(data: any) {
-        this.body = data;
-        return this;
-      },
-      setHeader: () => {}
-    };
+    // Create Express-like request and response objects
+    const req = {
+      ...vercelReq,
+      body: vercelReq.body,
+      method: vercelReq.method,
+      headers: vercelReq.headers,
+      get: (header: string) => vercelReq.headers[header.toLowerCase()] as string | undefined,
+    } as unknown as Request;
 
-    await chatController(mockReq as any, mockRes as any);
+    const res = {
+      status: (code: number) => {
+        vercelRes.status(code);
+        return {
+          json: (data: any) => vercelRes.json(data),
+          send: (data: any) => vercelRes.send(data),
+        };
+      },
+      json: (data: any) => vercelRes.json(data),
+      send: (data: any) => vercelRes.send(data),
+      setHeader: (name: string, value: string) => vercelRes.setHeader(name, value),
+    } as unknown as Response;
 
-    if (mockRes.statusCode) {
-      res.status(mockRes.statusCode);
-    }
-    
-    return res.json(mockRes.body || { status: 'success' });
+    // Call the chat controller
+    await chatController(req, res);
   } catch (error) {
-    console.error('Error processing chat message:', error);
-    return res.status(500).json({ 
+    console.error('Error in chat API:', error);
+    return vercelRes.status(500).json({ 
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
