@@ -7,9 +7,9 @@ const groq = new Groq({
 });
 
 // Load HR policy data
-const leavePolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/leavePolicy.json'), 'utf8'));
-const holidays = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/holidays.json'), 'utf8'));
-const wfhPolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/wfhPolicy.json'), 'utf8'));
+const leavePolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../data/leavePolicy.json'), 'utf8'));
+const holidays = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../data/holidays.json'), 'utf8'));
+const wfhPolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../data/wfhPolicy.json'), 'utf8'));
 
 export class AiService {
     private buildSystemPrompt(conversationContext?: string): string {
