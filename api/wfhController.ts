@@ -1,7 +1,7 @@
 
 // Adapted from src/controllers/wfhController.ts for Vercel serverless
 
-import { SalesforceService } from '../../src/services/salesforceService';
+import { SalesforceService } from '../src/services/salesforceService';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const salesforceService = new SalesforceService();

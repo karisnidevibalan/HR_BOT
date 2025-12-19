@@ -1,7 +1,7 @@
 
 // Adapted from src/controllers/leaveController.ts for Vercel serverless
 
-import { SalesforceService } from '../../src/services/salesforceService';
+import { SalesforceService } from '../src/services/salesforceService';
 import path from 'path';
 import fs from 'fs';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
