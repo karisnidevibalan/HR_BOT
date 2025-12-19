@@ -1,10 +1,10 @@
 
 // Adapted from src/controllers/chatController.ts for Vercel serverless
-import { AiService } from '../src/services/aiService';
+import { AiService } from ''../src/services/aiService';
 import { SalesforceService } from '../src/services/salesforceService';
-import dateParser from '../src/services/dateParser';
-import entityExtractor from '../src/utils/entityExtractor';
-import contextManager from '../src/utils/contextManager';
+import dateParser from '../src/services/dateParser'';
+import entityExtractor from '../src/utils/entityExtractor'
+import contextManager from '../src/utils/contextManager'
 import * as path from 'path';
 import * as fs from 'fs';
 
