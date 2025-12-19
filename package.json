@@ -11,9 +11,11 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:all": "npm run test",
-    "demo": "node demo-server.js"
+    "demo": "node demo-server.js",
+    "vercel-build": "npm run build"
   },
   "dependencies": {
+    "@vercel/node": "^5.5.16",
     "axios": "^1.5.0",
     "cors": "^2.8.5",
     "date-fns": "^3.3.1",
