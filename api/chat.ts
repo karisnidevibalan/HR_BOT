@@ -12,8 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // For now, return a simple test response
-    // In production, you would call your actual chatbot logic here
+    // Return a simple test response
+    // In production, integrate with your actual chatbot logic
     return res.status(200).json({
       reply: 'HR Bot is working. You said: ' + message,
       timestamp: new Date().toISOString()
