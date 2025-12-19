@@ -14,9 +14,11 @@ const salesforceService = new SalesforceService();
 // ...existing helper functions from src/controllers/chatController.ts...
 // (Omitted here for brevity, but all helper functions and logic should be copied over)
 
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
 // Main handler function for Vercel
-export default async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The main logic from the exported chatController function in src/controllers/chatController.ts
-  // Replace Express types with generic req, res for Vercel
+  // Replace Express types with VercelRequest, VercelResponse for Vercel
   // ...full controller logic here...
 }

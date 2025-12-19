@@ -1,12 +1,14 @@
 
 // Adapted from src/controllers/leaveController.ts for Vercel serverless
+
 import { SalesforceService } from '../../src/services/salesforceService';
 import path from 'path';
 import fs from 'fs';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const salesforceService = new SalesforceService();
 
-export default async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
     // Apply leave logic
     try {
