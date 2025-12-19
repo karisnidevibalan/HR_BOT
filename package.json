@@ -4,19 +4,18 @@
   "description": "AI-powered HR Agent for Winfomi",
   "main": "dist/app.js",
   "scripts": {
-    "start": "node dist/app.js",
+  "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
     "build": "tsc",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+  "test": "jest",
+  "test:watch": "jest --watch",
+  "test:coverage": "jest --coverage",
     "test:all": "npm run test",
-    "demo": "node demo-server.js",
+  "demo": "node demo-server.js",
     "vercel-build": "npm install && npm run build",
-    "now-build": "npm run build"
-  },
+  "now-build": "npm run build"
+},
   "dependencies": {
-    "@vercel/node": "^5.5.16",
     "axios": "^1.5.0",
     "cors": "^2.8.5",
     "date-fns": "^3.3.1",
