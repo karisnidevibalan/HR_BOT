@@ -1,9 +1,10 @@
-.render.yamlservices:
+services:
   - type: web
     name: hr-bot-api
     env: node
+    rootDir: ./
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: node dist/src/app.js
     envVars:
       - key: NODE_ENV
         value: production
