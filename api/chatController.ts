@@ -1,24 +1,25 @@
-
-// Adapted from src/controllers/chatController.ts for Vercel serverless
-import { AiService } from ''../src/services/aiService';
-import { SalesforceService } from '../src/services/salesforceService';
-import dateParser from '../src/services/dateParser'';
-import entityExtractor from '../src/utils/entityExtractor'
-import contextManager from '../src/utils/contextManager'
-import * as path from 'path';
-import * as fs from 'fs';
-
-const aiService = new AiService();
-const salesforceService = new SalesforceService();
-
-// ...existing helper functions from src/controllers/chatController.ts...
-// (Omitted here for brevity, but all helper functions and logic should be copied over)
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Main handler function for Vercel
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // The main logic from the exported chatController function in src/controllers/chatController.ts
-  // Replace Express types with VercelRequest, VercelResponse for Vercel
-  // ...full controller logic here...
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // For now, return a simple test response
+    // In production, you would call your actual chatbot logic here
+    return res.status(200).json({
+      reply: 'HR Bot is working. You said: ' + message,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error in chat handler:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }
