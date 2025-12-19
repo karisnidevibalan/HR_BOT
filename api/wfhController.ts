@@ -10,11 +10,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
     // Apply WFH logic
     try {
-      const { employeeName, date, reason } = req.body;
-      if (!employeeName || !date) {
-        return res.status(400).json({ error: 'Missing required fields: employeeName, date' });
+      const { employeeName, wfhDate, reason } = req.body as {
+        employeeName: string;
+        wfhDate: string;
+        reason?: string;
+      };
+      
+      if (!employeeName || !wfhDate) {
+        return res.status(400).json({ error: 'Missing required fields' });
       }
-      const result = await salesforceService.createWfhRecord({ employeeName, date, reason: reason || 'No reason provided' });
+      const result = await salesforceService.createWfhRecord({ employeeName, date: wfhDate, reason: reason || 'No reason provided' });
       if (result.success) {
         res.json({
           success: true,
@@ -39,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else if (req.method === 'GET') {
     // Get WFH status logic
     try {
-      const { id } = req.query;
+      const { id } = req.query as { id: string };
       const result = await salesforceService.getRecord(id);
       if (result.success) {
         res.json({ success: true, record: result.record });

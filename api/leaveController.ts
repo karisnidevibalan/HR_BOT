@@ -12,9 +12,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
     // Apply leave logic
     try {
-      const { employeeName, leaveType, startDate, endDate, reason } = req.body;
+      const { employeeName, leaveType, startDate, endDate, reason } = req.body as {
+        employeeName: string;
+        leaveType: string;
+        startDate: string;
+        endDate: string;
+        reason?: string;
+      };
+      
       if (!employeeName || !leaveType || !startDate || !endDate) {
-        return res.status(400).json({ error: 'Missing required fields: employeeName, leaveType, startDate, endDate' });
+        return res.status(400).json({ error: 'Missing required fields' });
       }
       const holidaysPath = path.join(__dirname, '../../data/holidays.json');
       let holidaysList = [];
@@ -31,10 +38,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         leaveDates.push(d.toISOString().slice(0, 10));
       }
-      const holidayDates = holidaysList.map(h => h.date);
-      const conflictHoliday = leaveDates.find(date => holidayDates.includes(date));
+      const holidayDates = holidaysList.map((h: { date: string }) => h.date);
+      const conflictHoliday = leaveDates.find((date: string) => holidayDates.includes(date));
       if (conflictHoliday) {
-        const holidayObj = holidaysList.find(h => h.date === conflictHoliday);
+        const holidayObj = holidaysList.find((h: { date: string }) => h.date === conflictHoliday);
         return res.status(400).json({ error: `Cannot apply leave on ${conflictHoliday} (${holidayObj?.name || 'Holiday'}). It is a company holiday.` });
       }
       const result = await salesforceService.createLeaveRecord({ employeeName, leaveType, startDate, endDate, reason: reason || 'No reason provided' });
@@ -63,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else if (req.method === 'GET') {
     // Get leave status logic
     try {
-      const { id } = req.query;
+      const { id } = req.query as { id: string };
       const result = await salesforceService.getRecord(id);
       if (result.success) {
         res.json({ success: true, record: result.record });
